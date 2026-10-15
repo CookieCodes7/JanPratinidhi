@@ -1,323 +1,2072 @@
-import { type ReactNode, useEffect, useState } from 'react';
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { ErrorBoundary } from '@/components/error-boundary';
-import { Toaster } from '@/components/ui/toaster';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { Link, Router as WouterRouter, useLocation } from 'wouter';
+import { type ReactNode, useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { Toaster } from "@/components/ui/toaster";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Link, Router as WouterRouter, useLocation } from "wouter";
 import {
-  Activity, ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, Building2, Check,
-  ChevronDown, CircleHelp, ClipboardList, CloudSun, Database, ExternalLink, Eye,
-  FileBarChart, FileCheck2, Filter, Flag, Gauge, GitCompareArrows, History, Home,
-  Info, LayoutDashboard, Landmark, Library, ListFilter, LogIn, LogOut, Mail, MapPin,
-  Menu, MessageSquareText, Moon, MoreHorizontal, PanelLeftClose, Plus, Search,
-  Settings, ShieldCheck, SlidersHorizontal, Sparkles, Sun, ThumbsUp, UserRound,
-  Users, X, Zap,
-} from 'lucide-react';
+  Activity,
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  BookOpen,
+  Check,
+  CircleHelp,
+  ClipboardList,
+  CloudSun,
+  Database,
+  ExternalLink,
+  Eye,
+  FileCheck2,
+  Home,
+  Info,
+  LayoutDashboard,
+  Landmark,
+  Library,
+  ListFilter,
+  LogIn,
+  LogOut,
+  MapPin,
+  Menu,
+  MessageSquareText,
+  Moon,
+  MoreHorizontal,
+  PanelLeftClose,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Sun,
+  ThumbsUp,
+  UserRound,
+  Users,
+  X,
+  Zap,
+  GitCompareArrows,
+} from "lucide-react";
 import {
-  Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, Legend, Line, LineChart,
-  Pie, PieChart, ResponsiveContainer, Tooltip as ChartTooltip, XAxis, YAxis,
-} from 'recharts';
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip as ChartTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
 import {
-  attendanceTrend, auditEntries, feedback, issues, projects, questions,
-  representatives, sessions, sources, type Representative,
-} from './data';
+  attendanceTrend,
+  auditEntries,
+  feedback,
+  issues,
+  projects,
+  questions,
+  representatives,
+  sources,
+  type Representative,
+} from "./data";
 
 const queryClient = new QueryClient();
 
 type IconType = typeof Home;
-type PageProps = { onPai: () => void; onSource: (source: typeof sources[number]) => void; onQuestion: (question: typeof questions[number]) => void };
+
+type PageProps = {
+  onPai: () => void;
+  onSource: (source: typeof sources[number]) => void;
+  onQuestion: (question: typeof questions[number]) => void;
+};
+
 type ApiDashboard = {
-  mode: string; available: boolean; last_synced_at: string | null; message: string;
-  metrics: { pai: number | null; attendance: number | null; questions: number; active_issues: number; debates: number; bills: number };
-  sessions: { session: string; attendance: number | null; questions: number; participation: number | null }[];
+  mode: string;
+  available: boolean;
+  last_synced_at: string | null;
+  message: string;
+  metrics: {
+    pai: number | null;
+    attendance: number | null;
+    questions: number;
+    active_issues: number;
+    debates: number;
+    bills: number;
+  };
+  sessions: {
+    session: string;
+    attendance: number | null;
+    questions: number;
+    participation: number | null;
+  }[];
 };
-type ApiRepresentative = {
-  id: number; name: string; party: string | null; house: string; state: string; constituency: string | null;
-  term: string | null; attendance: number | null; questions: number; debates: number; bills: number; pai: number | null;
-};
-type ApiRepresentativeResponse = { items: ApiRepresentative[]; total: number; mode: string };
+
 const apiGet = async <T,>(path: string): Promise<T> => {
   try {
     const response = await fetch(`/api/${path}`);
-    if (!response.ok) throw new Error(`API request failed: ${response.status}`);
+
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
     return response.json() as Promise<T>;
   } catch {
-    // The standalone build intentionally works without a backend.
-    // Use the bundled demo records until a local API is added.
-    if (path.startsWith('dashboard')) {
+    if (path.startsWith("dashboard")) {
       return {
-        mode: 'demo', available: true, last_synced_at: null,
-        message: 'Demo records are shown for product exploration. They are not verified public facts.',
-        metrics: { pai: 78, attendance: 86, questions: 491, active_issues: issues.filter(i => i.status !== 'Reported').length, debates: 178, bills: 51 },
-        sessions: attendanceTrend.map(s => ({ session: s.session, attendance: s.attendance, questions: s.questions, participation: s.participation }))
+        mode: "demo",
+        available: true,
+        last_synced_at: null,
+        message:
+          "Demo records are shown for product exploration. They are not verified public facts.",
+        metrics: {
+          pai: 78,
+          attendance: 86,
+          questions: 491,
+          active_issues: issues.filter(
+            (i) => i.status !== "Reported"
+          ).length,
+          debates: 178,
+          bills: 51,
+        },
+        sessions: attendanceTrend.map((s) => ({
+          session: s.session,
+          attendance: s.attendance,
+          questions: s.questions,
+          participation: s.participation,
+        })),
       } as T;
     }
-    if (path.startsWith('location/resolve')) {
+
+    if (path.startsWith("location/resolve")) {
       return {
-        status: 'unavailable', confidence: 'not available',
-        message: 'PIN-to-constituency lookup is not connected in the standalone demo yet. The interface is ready for a verified local data source.',
-        location: { state: null, district: null, city: null, pincode: path.split('pincode=')[1] ?? null },
-        parliamentary_constituencies: [], assembly_constituencies: []
+        status: "unavailable",
+        confidence: "not available",
+        message:
+          "PIN-to-constituency lookup is not connected in the standalone demo yet.",
+        location: {
+          state: null,
+          district: null,
+          city: null,
+          pincode: path.split("pincode=")[1] ?? null,
+        },
+        parliamentary_constituencies: [],
+        assembly_constituencies: [],
       } as T;
     }
-    throw new Error('Local API unavailable');
+
+    throw new Error("Local API unavailable");
   }
 };
 
 type NavItem = [string, string, IconType];
+
 const navGroups: { label: string; items: NavItem[] }[] = [
-  { label: 'Explore', items: [
-    ['Dashboard', '/dashboard', LayoutDashboard], ['Representatives', '/representatives', Users], ['Find my representatives', '/find-representatives', MapPin],
-    ['Questions', '/questions', CircleHelp], ['Constituency issues', '/issues', MapPin],
-    ['Development tracker', '/tracker', ClipboardList], ['Analytics', '/analytics', BarChart3],
-  ] },
-  { label: 'Compare & contribute', items: [
-    ['Compare representatives', '/compare', GitCompareArrows], ['Citizen feedback', '/feedback', MessageSquareText],
-  ] },
-  { label: 'Trust & governance', items: [
-    ['Data sources', '/sources', Database], ['Admin / data management', '/admin', SlidersHorizontal],
-    ['Audit log', '/audit', History], ['About JanPratinidhi', '/about', Info], ['Settings', '/settings', Settings],
-  ] },
+  {
+    label: "Explore",
+    items: [
+      ["Dashboard", "/dashboard", LayoutDashboard],
+      ["Representatives", "/representatives", Users],
+      ["Find my representatives", "/find-representatives", MapPin],
+      ["Questions", "/questions", CircleHelp],
+      ["Constituency issues", "/issues", MapPin],
+      ["Development tracker", "/tracker", ClipboardList],
+      ["Analytics", "/analytics", BarChart3],
+    ],
+  },
+  {
+    label: "Compare & contribute",
+    items: [
+      ["Compare representatives", "/compare", GitCompareArrows],
+      ["Citizen feedback", "/feedback", MessageSquareText],
+    ],
+  },
+  {
+    label: "Trust & governance",
+    items: [
+      ["Data sources", "/sources", Database],
+      ["Admin / data management", "/admin", Settings],
+      ["Audit log", "/audit", FileCheck2],
+      ["About JanPratinidhi", "/about", Info],
+      ["Settings", "/settings", Settings],
+    ],
+  },
 ];
 
 function Logo({ compact = false }: { compact?: boolean }) {
-  return <Link href="/" data-testid="link-logo" className={`flex items-center gap-3 ${compact ? 'justify-center' : ''}`}>
-    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground shadow-sm"><Landmark size={19} strokeWidth={2.5} /></span>
-    {!compact && <span className="leading-none"><span className="block font-display text-[21px] font-semibold tracking-[-.03em]">JanPratinidhi</span><span className="mt-1 block font-mono-ui text-[9px] uppercase tracking-[.18em] text-sidebar-foreground/60">public record / demo</span></span>}
-  </Link>;
+  return (
+    <Link
+      href="/"
+      data-testid="link-logo"
+      className={`flex items-center gap-3 ${
+        compact ? "justify-center" : ""
+      }`}
+    >
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground shadow-sm">
+        <Landmark size={19} strokeWidth={2.5} />
+      </span>
+
+      {!compact && (
+        <span className="leading-none">
+          <span className="block font-display text-[21px] font-semibold tracking-[-.03em]">
+            JanPratinidhi
+          </span>
+
+          <span className="mt-1 block font-mono-ui text-[9px] uppercase tracking-[.18em] text-sidebar-foreground/60">
+            public record / demo
+          </span>
+        </span>
+      )}
+    </Link>
+  );
 }
 
-function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'teal' | 'saffron' | 'red' | 'purple' }) {
-  const tones = { neutral: 'bg-muted text-muted-foreground', teal: 'bg-primary/10 text-primary', saffron: 'bg-accent/20 text-foreground', red: 'bg-destructive/10 text-destructive', purple: 'bg-[#6d5b83]/15 text-[#6d5b83] dark:text-[#c4b3d9]' };
-  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.08em] ${tones[tone]}`}>{children}</span>;
-}
-
-function Button({ children, variant = 'primary', onClick, className = '', disabled = false, testId }: { children: ReactNode; variant?: 'primary' | 'secondary' | 'ghost' | 'outline' | 'danger'; onClick?: () => void; className?: string; disabled?: boolean; testId: string }) {
-  const variants = {
-    primary: 'bg-primary text-primary-foreground hover:brightness-110',
-    secondary: 'bg-accent text-accent-foreground hover:brightness-105',
-    ghost: 'bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-    outline: 'border border-border bg-card text-foreground hover:border-primary hover:text-primary',
-    danger: 'bg-destructive text-destructive-foreground hover:brightness-110',
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "neutral" | "teal" | "saffron" | "red" | "purple";
+}) {
+  const tones = {
+    neutral: "bg-muted text-muted-foreground",
+    teal: "bg-primary/10 text-primary",
+    saffron: "bg-accent/20 text-foreground",
+    red: "bg-destructive/10 text-destructive",
+    purple:
+      "bg-[#6d5b83]/15 text-[#6d5b83] dark:text-[#c4b3d9]",
   };
-  return <button type="button" disabled={disabled} onClick={onClick} data-testid={testId} className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}>{children}</button>;
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.08em] ${tones[tone]}`}
+    >
+      {children}
+    </span>
+  );
 }
 
-function SectionHeading({ eyebrow, title, detail, action }: { eyebrow?: string; title: string; detail?: string; action?: ReactNode }) {
-  return <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-    <div>{eyebrow && <div className="mb-2 font-mono-ui text-[10px] font-medium uppercase tracking-[.2em] text-primary">{eyebrow}</div>}<h2 className="font-display text-[30px] leading-none tracking-[-.025em] text-foreground">{title}</h2>{detail && <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{detail}</p>}</div>
-    {action}
-  </div>;
+function Button({
+  children,
+  variant = "primary",
+  onClick,
+  className = "",
+  disabled = false,
+  testId,
+}: {
+  children: ReactNode;
+  variant?: "primary" | "secondary" | "ghost" | "outline" | "danger";
+  onClick?: () => void;
+  className?: string;
+  disabled?: boolean;
+  testId: string;
+}) {
+  const variants = {
+    primary:
+      "bg-primary text-primary-foreground hover:brightness-110",
+    secondary:
+      "bg-accent text-accent-foreground hover:brightness-105",
+    ghost:
+      "bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+    outline:
+      "border border-border bg-card text-foreground hover:border-primary hover:text-primary",
+    danger:
+      "bg-destructive text-destructive-foreground hover:brightness-110",
+  };
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      data-testid={testId}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2.5 text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+    >
+      {children}
+    </button>
+  );
 }
 
-function Card({ children, className = '', testId }: { children: ReactNode; className?: string; testId?: string }) {
-  return <section data-testid={testId} className={`rounded-xl border border-card-border bg-card civic-shadow ${className}`}>{children}</section>;
+function SectionHeading({
+  eyebrow,
+  title,
+  detail,
+  action,
+}: {
+  eyebrow?: string;
+  title: string;
+  detail?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div>
+        {eyebrow && (
+          <div className="mb-2 font-mono-ui text-[10px] font-medium uppercase tracking-[.2em] text-primary">
+            {eyebrow}
+          </div>
+        )}
+
+        <h2 className="font-display text-[30px] leading-none tracking-[-.025em] text-foreground">
+          {title}
+        </h2>
+
+        {detail && (
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            {detail}
+          </p>
+        )}
+      </div>
+
+      {action}
+    </div>
+  );
 }
 
-function Metric({ label, value, detail, accent = 'teal', onClick }: { label: string; value: string; detail: string; accent?: 'teal' | 'saffron' | 'red'; onClick?: () => void }) {
-  return <button type="button" onClick={onClick} data-testid={`metric-${label.toLowerCase().replaceAll(' ', '-')}`} className="group min-w-0 text-left">
-    <Card className="relative overflow-hidden p-5 transition-transform group-hover:-translate-y-0.5"><span className={`absolute left-0 top-0 h-full w-1 ${accent === 'saffron' ? 'bg-accent' : accent === 'red' ? 'bg-destructive' : 'bg-primary'}`} /><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">{label}</div><div className="mt-3 font-display text-[34px] leading-none">{value}</div><div className="mt-2 text-xs text-muted-foreground">{detail}</div></Card>
-  </button>;
+function Card({
+  children,
+  className = "",
+  testId,
+}: {
+  children: ReactNode;
+  className?: string;
+  testId?: string;
+}) {
+  return (
+    <section
+      data-testid={testId}
+      className={`rounded-xl border border-card-border bg-card civic-shadow ${className}`}
+    >
+      {children}
+    </section>
+  );
 }
 
-function Shell({ children, theme, setTheme, loggedIn, setLoggedIn }: { children: ReactNode; theme: boolean; setTheme: (v: boolean) => void; loggedIn: boolean; setLoggedIn: (v: boolean) => void }) {
-  const [location, setLocation] = useLocation();
+function Metric({
+  label,
+  value,
+  detail,
+  accent = "teal",
+  onClick,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  accent?: "teal" | "saffron" | "red";
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={`metric-${label.toLowerCase().replaceAll(" ", "-")}`}
+      className="group min-w-0 text-left"
+    >
+      <Card className="relative overflow-hidden p-5 transition-transform group-hover:-translate-y-0.5">
+        <span
+          className={`absolute left-0 top-0 h-full w-1 ${
+            accent === "saffron"
+              ? "bg-accent"
+              : accent === "red"
+              ? "bg-destructive"
+              : "bg-primary"
+          }`}
+        />
+
+        <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">
+          {label}
+        </div>
+
+        <div className="mt-3 font-display text-[34px] leading-none">
+          {value}
+        </div>
+
+        <div className="mt-2 text-xs text-muted-foreground">
+          {detail}
+        </div>
+      </Card>
+    </button>
+  );
+}
+
+function Shell({
+  children,
+  theme,
+  setTheme,
+  loggedIn,
+  setLoggedIn,
+}: {
+  children: ReactNode;
+  theme: boolean;
+  setTheme: (v: boolean) => void;
+  loggedIn: boolean;
+  setLoggedIn: (v: boolean) => void;
+}) {
+  const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const current = navGroups.flatMap(g => g.items).find(item => item[1] === location)?.[0] || 'Dashboard';
-  return <div className="app-noise flex min-h-[100dvh] bg-background">
-    <aside className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:static lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="flex h-[88px] items-center border-b border-sidebar-border px-6"><Logo /></div>
-      <div className="flex-1 overflow-y-auto px-3 py-5">
-        {navGroups.map(group => <div key={group.label} className="mb-6"><div className="mb-2 px-3 font-mono-ui text-[9px] uppercase tracking-[.2em] text-sidebar-foreground/45">{group.label}</div>{group.items.map(([label, href, Icon]) => <Link key={href} href={href} onClick={() => setMobileOpen(false)} data-testid={`link-nav-${label.toLowerCase().replaceAll(' ', '-')}`} className={`mb-1 flex items-center gap-3 rounded-lg px-3 py-2.5 text-[13px] transition-colors ${location === href ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'text-sidebar-foreground/72 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground'}`}><Icon size={16} strokeWidth={location === href ? 2.4 : 1.8} /><span>{label}</span>{href === '/admin' && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-accent" />}</Link>)}</div>)}
-      </div>
-      <div className="border-t border-sidebar-border p-4">
-        <div className="mb-3 rounded-lg bg-sidebar-accent/70 p-3"><div className="flex items-center gap-2"><ShieldCheck size={15} className="text-accent" /><span className="font-mono-ui text-[9px] uppercase tracking-[.14em] text-sidebar-foreground/70">Data posture</span></div><p className="mt-2 text-[11px] leading-4 text-sidebar-foreground/55">Public records only. Attribution is never inferred.</p></div>
-        <button type="button" onClick={() => setLoggedIn(!loggedIn)} data-testid="button-session" className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-xs text-sidebar-foreground/65 hover:bg-sidebar-accent hover:text-sidebar-foreground">{loggedIn ? <><span className="grid h-7 w-7 place-items-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">CN</span><span className="flex-1">Citizen view<span className="block text-[10px] opacity-60">Signed in locally</span></span><LogOut size={14} /></> : <><span className="grid h-7 w-7 place-items-center rounded-full border border-sidebar-border"><LogIn size={14} /></span><span>Sign in to contribute</span></>}</button>
-      </div>
-    </aside>
-    {mobileOpen && <button type="button" aria-label="Close navigation" onClick={() => setMobileOpen(false)} data-testid="button-close-mobile-nav" className="fixed inset-0 z-30 bg-foreground/30 lg:hidden" />}
-    <main className="min-w-0 flex-1">
-      <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border/80 bg-background/90 px-4 backdrop-blur-md sm:px-8">
-        <div className="flex items-center gap-3"><Button variant="ghost" onClick={() => setMobileOpen(true)} className="px-2 lg:hidden" testId="button-open-mobile-nav"><Menu size={19} /></Button><div><div className="font-mono-ui text-[10px] uppercase tracking-[.17em] text-muted-foreground">JanPratinidhi <span className="text-accent">/</span></div><div className="mt-1 text-sm font-semibold">{current}</div></div></div>
-        <div className="flex items-center gap-2"><div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 md:flex"><Search size={15} className="text-muted-foreground" /><input aria-label="Search the public record" data-testid="input-global-search" className="w-36 bg-transparent text-xs outline-none placeholder:text-muted-foreground" placeholder="Search records..." /></div><Button variant="ghost" onClick={() => setTheme(!theme)} className="px-2.5" testId="button-toggle-theme">{theme ? <Sun size={17} /> : <Moon size={17} />}</Button><button type="button" data-testid="button-notifications" className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted"><Bell size={17} /><span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" /></button><span className="hidden h-8 w-px bg-border sm:block" /><span className="hidden font-mono-ui text-[10px] uppercase text-muted-foreground sm:block">DEMO</span></div>
+
+  const current =
+    navGroups
+      .flatMap((g) => g.items)
+      .find((item) => item[1] === location)?.[0] ||
+    "Dashboard";
+
+  return (
+    <div className="app-noise flex min-h-[100dvh] bg-background">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:static lg:translate-x-0 ${
+          mobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex h-[72px] items-center border-b border-sidebar-border px-5">
+          <Logo />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 py-5">
+          {navGroups.map((group) => (
+            <div key={group.label} className="mb-7">
+              <div className="mb-2 px-3 font-mono-ui text-[9px] font-bold uppercase tracking-[.18em] text-sidebar-foreground/45">
+                {group.label}
+              </div>
+
+              <nav className="space-y-1">
+                {group.items.map(([label, href, Icon]) => {
+                  const active = location === href;
+
+                  return (
+                    <Link
+                      key={href}
+                      href={href}
+                      onClick={() => setMobileOpen(false)}
+                      data-testid={`nav-${label
+                        .toLowerCase()
+                        .replaceAll(" ", "-")}`}
+                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
+                        active
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+                      }`}
+                    >
+                      <Icon size={17} />
+
+                      <span>{label}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
+          ))}
+        </div>
+
+        <div className="border-t border-sidebar-border p-4">
+          <div className="rounded-lg bg-sidebar-accent/50 p-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck size={15} className="text-primary" />
+
+              <span className="font-mono-ui text-[9px] font-bold uppercase tracking-[.12em]">
+                Data mode
+              </span>
+            </div>
+
+            <p className="mt-2 text-[11px] leading-5 text-sidebar-foreground/55">
+              Demo records are clearly labelled. Source records remain the
+              authority.
+            </p>
+          </div>
+        </div>
+      </aside>
+
+      {mobileOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+        />
+      )}
+
+      <main className="min-w-0 flex-1">
+        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur md:px-7">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileOpen(true)}
+              className="grid h-10 w-10 place-items-center rounded-lg border border-border lg:hidden"
+              aria-label="Open navigation"
+            >
+              <Menu size={18} />
+            </button>
+
+            <div>
+              <div className="font-mono-ui text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+                JanPratinidhi
+              </div>
+
+              <div className="mt-0.5 font-display text-xl">
+                {current}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTheme(!theme)}
+              data-testid="button-toggle-theme"
+              aria-label={
+                theme
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title={
+                theme
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              className="relative grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
+            >
+              {theme ? (
+                <Sun size={17} />
+              ) : (
+                <Moon size={17} />
+              )}
+            </button>
+
+            <Link
+              href="/settings"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
+              aria-label="Settings"
+            >
+              <Settings size={17} />
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setLoggedIn(!loggedIn)}
+              className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold sm:flex"
+            >
+              {loggedIn ? (
+                <>
+                  <LogOut size={15} />
+                  Sign out
+                </>
+              ) : (
+                <>
+                  <LogIn size={15} />
+                  Sign in
+                </>
+              )}
+            </button>
+          </div>
+        </header>
+
+        <div className="mx-auto w-full max-w-[1440px] px-4 py-7 md:px-7 lg:px-9">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/* =========================================================
+   LANDING PAGE
+   ========================================================= */
+
+function Landing({
+  onSource,
+  theme,
+  setTheme,
+}: {
+  onSource: (source: typeof sources[number]) => void;
+  theme: boolean;
+  setTheme: (v: boolean) => void;
+}) {
+  const [, setLocation] = useLocation();
+
+  return (
+    <div className="min-h-[100dvh] bg-background text-foreground">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-[72px] max-w-[1400px] items-center justify-between px-5 md:px-8">
+          <Logo />
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => setLocation("/about")}
+              testId="button-landing-about"
+            >
+              About
+            </Button>
+
+            {/* LANDING PAGE THEME SWITCH */}
+            <button
+              type="button"
+              onClick={() => setTheme(!theme)}
+              data-testid="button-landing-toggle-theme"
+              aria-label={
+                theme
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              title={
+                theme
+                  ? "Switch to light mode"
+                  : "Switch to dark mode"
+              }
+              className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
+            >
+              {theme ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+
+            <Button
+              onClick={() => setLocation("/dashboard")}
+              variant="outline"
+              testId="button-landing-enter"
+            >
+              Open workspace <ArrowRight size={15} />
+            </Button>
+          </div>
+        </div>
       </header>
-      <div className="mx-auto max-w-[1440px] px-4 pb-24 pt-8 sm:px-8 lg:px-10 lg:pb-10">{children}</div>
-      <div className="fixed inset-x-3 bottom-3 z-20 grid grid-cols-5 rounded-2xl border border-border bg-card/95 p-1.5 shadow-xl backdrop-blur lg:hidden">{[['/dashboard', Home], ['/representatives', Users], ['/questions', CircleHelp], ['/issues', MapPin], ['/settings', MoreHorizontal]].map(([href, Icon]) => <Link key={href as string} href={href as string} data-testid={`mobile-nav-${href}`} className={`grid place-items-center rounded-xl py-2 ${location === href ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}><Icon size={18} /></Link>)}</div>
-    </main>
-  </div>;
+
+      <main>
+        <section className="relative overflow-hidden border-b border-border">
+          <div className="absolute inset-0 opacity-[.05]">
+            <div className="absolute inset-0 bg-[url('/parliament.jpg')] bg-cover bg-center" />
+          </div>
+
+          <div className="relative mx-auto grid min-h-[680px] max-w-[1400px] items-center px-5 py-20 md:px-8 lg:grid-cols-[1.1fr_.9fr] lg:gap-12">
+            <div>
+              <Badge tone="saffron">
+                Citizen transparency platform
+              </Badge>
+
+              <h1 className="mt-6 max-w-4xl font-display text-5xl leading-[.95] tracking-[-.04em] md:text-7xl">
+                Understand your
+                <span className="block text-primary">
+                  representatives.
+                </span>
+              </h1>
+
+              <p className="mt-7 max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+                JanPratinidhi brings parliamentary activity, constituency
+                issues, development projects and public records into one
+                citizen-friendly workspace.
+              </p>
+
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Button
+                  onClick={() => setLocation("/dashboard")}
+                  testId="button-hero-dashboard"
+                >
+                  Explore dashboard
+                  <ArrowRight size={16} />
+                </Button>
+
+                <Button
+                  onClick={() => setLocation("/representatives")}
+                  variant="outline"
+                  testId="button-hero-representatives"
+                >
+                  Browse representatives
+                  <Users size={16} />
+                </Button>
+              </div>
+
+              <div className="mt-10 flex flex-wrap gap-6 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={15} className="text-primary" />
+                  Source-aware records
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Eye size={15} className="text-primary" />
+                  Transparent indicators
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Users size={15} className="text-primary" />
+                  Citizen-first design
+                </div>
+              </div>
+            </div>
+
+            <div className="relative">
+              <Card className="overflow-hidden">
+                <div className="border-b border-border bg-muted/50 p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-mono-ui text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+                        Demo snapshot
+                      </div>
+
+                      <div className="mt-1 font-display text-2xl">
+                        Parliamentary activity
+                      </div>
+                    </div>
+
+                    <Badge tone="teal">Demo</Badge>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-px bg-border">
+                  <div className="bg-card p-5">
+                    <div className="text-xs text-muted-foreground">
+                      PAI
+                    </div>
+
+                    <div className="mt-2 font-display text-4xl text-primary">
+                      78
+                    </div>
+
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      transparent composite
+                    </div>
+                  </div>
+
+                  <div className="bg-card p-5">
+                    <div className="text-xs text-muted-foreground">
+                      Attendance
+                    </div>
+
+                    <div className="mt-2 font-display text-4xl">
+                      86%
+                    </div>
+
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      recorded sittings
+                    </div>
+                  </div>
+
+                  <div className="bg-card p-5">
+                    <div className="text-xs text-muted-foreground">
+                      Questions
+                    </div>
+
+                    <div className="mt-2 font-display text-4xl">
+                      491
+                    </div>
+
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      recorded questions
+                    </div>
+                  </div>
+
+                  <div className="bg-card p-5">
+                    <div className="text-xs text-muted-foreground">
+                      Issues
+                    </div>
+
+                    <div className="mt-2 font-display text-4xl">
+                      {issues.filter(
+                        (i) => i.status !== "Reported"
+                      ).length}
+                    </div>
+
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      active records
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <span className="font-mono-ui text-[9px] uppercase tracking-[.16em] text-muted-foreground">
+                      Session trend
+                    </span>
+
+                    <Activity size={16} className="text-primary" />
+                  </div>
+
+                  <div className="h-[180px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={attendanceTrend}>
+                        <CartesianGrid
+                          strokeDasharray="3 3"
+                          vertical={false}
+                          opacity={0.2}
+                        />
+
+                        <XAxis
+                          dataKey="session"
+                          tickLine={false}
+                          axisLine={false}
+                          fontSize={10}
+                        />
+
+                        <YAxis
+                          tickLine={false}
+                          axisLine={false}
+                          fontSize={10}
+                          width={30}
+                        />
+
+                        <ChartTooltip />
+
+                        <Area
+                          type="monotone"
+                          dataKey="attendance"
+                          fill="currentColor"
+                          stroke="currentColor"
+                          fillOpacity={0.08}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1400px] px-5 py-20 md:px-8">
+          <SectionHeading
+            eyebrow="What you can explore"
+            title="One workspace. Multiple public records."
+            detail="Move from a representative profile to questions, constituency issues, development work and source records without losing context."
+          />
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {[
+              [
+                "Representative profiles",
+                "Attendance, questions, participation and constituency context.",
+                Users,
+              ],
+              [
+                "Constituency issues",
+                "Track reported civic problems, status and responsible authorities.",
+                MapPin,
+              ],
+              [
+                "Development tracker",
+                "Follow public projects, stages and available progress information.",
+                ClipboardList,
+              ],
+              [
+                "Data provenance",
+                "See where records come from and distinguish demo data from verified sources.",
+                Database,
+              ],
+            ].map(([title, text, Icon]) => (
+              <Card
+                key={title as string}
+                className="p-5 transition-transform hover:-translate-y-1"
+              >
+                <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                  {(() => {
+                    const I = Icon as IconType;
+                    return <I size={19} />;
+                  })()}
+                </div>
+
+                <h3 className="mt-5 font-display text-xl">
+                  {title as string}
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  {text as string}
+                </p>
+              </Card>
+            ))}
+          </div>
+        </section>
+
+        <section className="border-y border-border bg-muted/30">
+          <div className="mx-auto grid max-w-[1400px] gap-10 px-5 py-20 md:px-8 lg:grid-cols-2">
+            <div>
+              <Badge tone="teal">Methodology first</Badge>
+
+              <h2 className="mt-5 max-w-xl font-display text-4xl leading-tight md:text-5xl">
+                Indicators should explain the record, not replace it.
+              </h2>
+
+              <p className="mt-5 max-w-xl text-sm leading-7 text-muted-foreground">
+                JanPratinidhi presents measurable signals such as attendance,
+                questions and participation. Composite indicators are
+                descriptive tools and should never be treated as an absolute
+                judgment of a representative.
+              </p>
+
+              <Button
+                onClick={() => setLocation("/about")}
+                variant="outline"
+                className="mt-6"
+                testId="button-landing-methodology"
+              >
+                Read methodology
+                <ArrowRight size={15} />
+              </Button>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Card className="p-5">
+                <ShieldCheck className="text-primary" size={20} />
+
+                <h3 className="mt-4 font-display text-xl">
+                  Source-aware
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Public records should remain traceable to their source.
+                </p>
+              </Card>
+
+              <Card className="p-5">
+                <Eye className="text-primary" size={20} />
+
+                <h3 className="mt-4 font-display text-xl">
+                  Transparent
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Indicators show how the record is being summarized.
+                </p>
+              </Card>
+
+              <Card className="p-5">
+                <Users className="text-primary" size={20} />
+
+                <h3 className="mt-4 font-display text-xl">
+                  Citizen-focused
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Information is organized around questions citizens
+                  actually ask.
+                </p>
+              </Card>
+
+              <Card className="p-5">
+                <Database className="text-primary" size={20} />
+
+                <h3 className="mt-4 font-display text-xl">
+                  Data-conscious
+                </h3>
+
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Demo records are explicitly distinguished from verified
+                  public data.
+                </p>
+              </Card>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto max-w-[1400px] px-5 py-20 md:px-8">
+          <SectionHeading
+            eyebrow="Data sources"
+            title="Follow the record back to its source."
+            detail="The source registry makes it clear what a record represents, where it comes from and what coverage is available in the current demo."
+            action={
+              <Button
+                onClick={() => setLocation("/sources")}
+                variant="outline"
+                testId="button-landing-sources"
+              >
+                View all sources
+                <ArrowRight size={15} />
+              </Button>
+            }
+          />
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {sources.slice(0, 3).map((source) => (
+              <button
+                key={source.name}
+                type="button"
+                onClick={() => onSource(source)}
+                className="text-left"
+              >
+                <Card className="h-full p-5 transition-transform hover:-translate-y-1">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary">
+                      <Database size={18} />
+                    </div>
+
+                    <Badge
+                      tone={
+                        source.status === "Verified"
+                          ? "teal"
+                          : "saffron"
+                      }
+                    >
+                      {source.status}
+                    </Badge>
+                  </div>
+
+                  <h3 className="mt-5 font-display text-xl">
+                    {source.name}
+                  </h3>
+
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    {source.coverage}
+                  </p>
+
+                  <div className="mt-5 flex items-center gap-2 text-xs font-semibold text-primary">
+                    Inspect source
+                    <ArrowRight size={14} />
+                  </div>
+                </Card>
+              </button>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <footer className="border-t border-border">
+        <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-5 py-7 text-xs text-muted-foreground md:flex-row md:items-center md:justify-between md:px-8">
+          <div>
+            © 2026 JanPratinidhi — public record / demo
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button
+              type="button"
+              onClick={() => setLocation("/about")}
+              className="hover:text-foreground"
+            >
+              About
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLocation("/sources")}
+              className="hover:text-foreground"
+            >
+              Sources
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setLocation("/dashboard")}
+              className="hover:text-foreground"
+            >
+              Workspace
+            </button>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
 }
 
-function Modal({ title, children, onClose, testId }: { title: string; children: ReactNode; onClose: () => void; testId: string }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-foreground/40 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid={testId}><div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl"><div className="mb-5 flex items-start justify-between gap-4"><h2 className="font-display text-2xl">{title}</h2><button type="button" onClick={onClose} data-testid={`button-close-${testId}`} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"><X size={18} /></button></div>{children}</div></div>;
+/* =========================================================
+   MODAL
+   ========================================================= */
+
+function Modal({
+  title,
+  children,
+  onClose,
+  testId,
+}: {
+  title: string;
+  children: ReactNode;
+  onClose: () => void;
+  testId: string;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-black/40 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      data-testid={testId}
+    >
+      <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-border bg-card p-6 shadow-2xl">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="font-display text-2xl">{title}</h2>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground hover:text-foreground"
+            aria-label="Close"
+          >
+            <X size={17} />
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
 }
 
-function Landing({ onSource }: { onSource: (source: typeof sources[number]) => void }) {
-  const [, setLocation] = useLocation();
-  return <div className="app-noise min-h-[100dvh] bg-background">
-    <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 sm:px-8"><Logo /><div className="hidden items-center gap-7 text-sm text-muted-foreground md:flex"><a href="#method" data-testid="link-landing-method">How it works</a><a href="#signals" data-testid="link-landing-signals">Signals</a><a href="#sources" data-testid="link-landing-sources">Sources</a></div><div className="flex items-center gap-2"><Button variant="ghost" onClick={() => setLocation('/about')} testId="button-landing-about">About</Button><Button onClick={() => setLocation('/')} variant="outline" testId="button-landing-enter">Open workspace <ArrowRight size={15} /></Button></div></nav>
-    <section className="relative overflow-hidden border-y border-border paper-grid"><div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-20 sm:px-8 lg:grid-cols-[1.08fr_.92fr] lg:py-28"><div className="reveal"><Badge tone="saffron"><span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-accent" /> Prototype / public record</Badge><h1 className="mt-7 max-w-3xl font-display text-[clamp(3.6rem,8vw,7.8rem)] leading-[.86] tracking-[-.055em]">A clearer view of <em className="text-primary">public work.</em></h1><p className="mt-8 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">JanPratinidhi brings parliamentary activity, constituency context and the underlying source trail into one calm, readable workspace.</p><div className="mt-9 flex flex-wrap gap-3"><Button onClick={() => setLocation('/dashboard')} testId="button-landing-dashboard">Explore the record <ArrowRight size={16} /></Button><Button onClick={() => setLocation('/representatives')} variant="outline" testId="button-landing-representatives">Browse representatives</Button></div><div className="mt-9 flex items-center gap-3 text-xs text-muted-foreground"><ShieldCheck size={16} className="text-primary" /><span>Neutral by design</span><span className="text-border">•</span><span>Every signal has a source</span></div></div><div className="relative reveal reveal-delay-2"><div className="absolute -right-8 -top-12 h-40 w-40 rounded-full bg-accent/25 blur-3xl" /><Card className="relative overflow-hidden border-primary/20 bg-card/90 p-6 sm:p-8"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-primary">Live snapshot</div><div className="mt-2 text-sm text-muted-foreground">18th Lok Sabha · Budget Session</div></div><Activity size={20} className="text-accent" /></div><div className="mt-9 flex items-end gap-6"><div className="font-display text-[104px] leading-[.7] tracking-[-.07em] text-primary">78</div><div className="pb-1"><div className="font-mono-ui text-xs text-muted-foreground">/ 100 PAI</div><div className="mt-2 text-xs font-semibold">Parliamentary Activity<br />Index</div></div></div><div className="mt-8 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full w-[78%] rounded-full bg-primary" /></div><div className="mt-6 grid grid-cols-3 gap-4 border-t border-border pt-5 text-xs"><div><div className="font-mono-ui text-[10px] text-muted-foreground">ATTENDANCE</div><div className="mt-1 text-lg font-semibold">86%</div></div><div><div className="font-mono-ui text-[10px] text-muted-foreground">QUESTIONS</div><div className="mt-1 text-lg font-semibold">491</div></div><div><div className="font-mono-ui text-[10px] text-muted-foreground">SITTINGS</div><div className="mt-1 text-lg font-semibold">24</div></div></div><div className="mt-7 flex items-center gap-2 rounded-lg bg-primary/5 p-3 text-[11px] leading-4 text-muted-foreground"><Info size={15} className="shrink-0 text-primary" />PAI is a descriptive composite, not a rating of a representative.</div></Card><div className="absolute -bottom-5 -left-6 rounded-lg border border-border bg-card px-4 py-3 civic-shadow"><div className="flex items-center gap-2 text-xs font-semibold"><span className="h-2 w-2 rounded-full bg-[#3d7b69]" />Source trail intact</div><div className="mt-1 pl-4 font-mono-ui text-[9px] text-muted-foreground">5 sources checked today</div></div></div></div></section>
-    <section id="method" className="mx-auto max-w-7xl px-5 py-24 sm:px-8"><div className="grid gap-12 lg:grid-cols-[.7fr_1.3fr]"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-primary">The premise</div><h2 className="mt-4 max-w-md font-display text-4xl leading-tight">Less theatre. More traceable record.</h2></div><div className="grid gap-8 sm:grid-cols-3"><div><span className="font-mono-ui text-3xl text-accent">01</span><h3 className="mt-4 font-semibold">Collect</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">Recorded questions, debates, attendance and bills are brought together by session.</p></div><div><span className="font-mono-ui text-3xl text-accent">02</span><h3 className="mt-4 font-semibold">Contextualise</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">Constituency issues and public projects sit alongside, never inside, parliamentary data.</p></div><div><span className="font-mono-ui text-3xl text-accent">03</span><h3 className="mt-4 font-semibold">Show the trail</h3><p className="mt-2 text-sm leading-6 text-muted-foreground">Follow every metric back to the public source and see when it was last reviewed.</p></div></div></div></section>
-    <section id="signals" className="border-y border-border bg-secondary/40"><div className="mx-auto max-w-7xl px-5 py-20 sm:px-8"><SectionHeading eyebrow="A working instrument" title="See the shape of a session" detail="Designed for a quick read, with enough depth for a careful one." action={<Button variant="outline" onClick={() => setLocation('/analytics')} testId="button-landing-analytics">Open analytics <ArrowRight size={15} /></Button>} /><div className="grid gap-4 md:grid-cols-[1.35fr_.65fr]"><Card className="p-6"><div className="mb-5 flex items-center justify-between"><span className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">Activity over five sessions</span><Badge tone="teal">Illustrative data</Badge></div><div className="h-56"><ResponsiveContainer width="100%" height="100%"><AreaChart data={attendanceTrend}><defs><linearGradient id="landingArea" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e7180" stopOpacity=".25" /><stop offset="100%" stopColor="#2e7180" stopOpacity="0" /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} /><XAxis dataKey="session" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis domain={[40, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><ChartTooltip contentStyle={{ borderRadius: 10, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }} /><Area type="monotone" dataKey="attendance" name="Attendance %" stroke="#2e7180" fill="url(#landingArea)" strokeWidth={2.5} /></AreaChart></ResponsiveContainer></div></Card><Card className="flex flex-col justify-between p-6"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">What is PAI?</div><div className="mt-5 font-display text-5xl">78<span className="text-xl text-muted-foreground"> / 100</span></div><p className="mt-3 text-sm leading-6 text-muted-foreground">A transparent index across presence, questions, debate participation and bills. It does not judge quality or intent.</p></div><Button variant="outline" onClick={() => onSource(sources[0])} className="mt-6 w-full" testId="button-landing-source">View methodology <ExternalLink size={14} /></Button></Card></div></div></section>
-    <section id="sources" className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-7 px-5 py-20 sm:px-8"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.2em] text-primary">Built for scrutiny</div><h2 className="mt-3 font-display text-4xl">Open records, readable structure.</h2><p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">The prototype uses local demo data modelled on parliamentary and government records. Explore the source register before you explore a number.</p></div><Button onClick={() => setLocation('/sources')} variant="outline" testId="button-landing-sources-cta">Browse source register <ArrowRight size={15} /></Button></section>
-    <footer className="border-t border-border bg-sidebar px-5 py-8 text-sidebar-foreground sm:px-8"><div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 text-xs"><span className="font-display text-lg">JanPratinidhi</span><span className="text-sidebar-foreground/55">A civic-tech prototype · DEMO DATA · Not affiliated with Parliament of India</span><span className="font-mono-ui text-[10px] text-accent">v0.4.2</span></div></footer>
-  </div>;
+/* =========================================================
+   DASHBOARD
+   ========================================================= */
+
+function Dashboard({
+  onPai,
+  onSource,
+  onQuestion,
+}: PageProps) {
+  const dashboard = useQuery<ApiDashboard>({
+    queryKey: ["/api/dashboard"],
+    queryFn: () => apiGet<ApiDashboard>("dashboard"),
+  });
+
+  const data = dashboard.data;
+
+  return (
+    <div>
+      <SectionHeading
+        eyebrow="Citizen overview"
+        title="Parliamentary activity dashboard"
+        detail="A compact view of representative activity, constituency records and public-data coverage."
+        action={
+          <Badge tone="saffron">
+            {data?.mode === "demo" ? "Demo data" : "Connected"}
+          </Badge>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          label="PAI"
+          value={data?.metrics.pai != null ? `${data.metrics.pai}` : "—"}
+          detail="Transparent composite indicator"
+          onClick={onPai}
+        />
+
+        <Metric
+          label="Attendance"
+          value={
+            data?.metrics.attendance != null
+              ? `${data.metrics.attendance}%`
+              : "—"
+          }
+          detail="Recorded parliamentary sittings"
+          accent="saffron"
+        />
+
+        <Metric
+          label="Questions"
+          value={`${data?.metrics.questions ?? "—"}`}
+          detail="Questions in the current record"
+        />
+
+        <Metric
+          label="Active issues"
+          value={`${data?.metrics.active_issues ?? "—"}`}
+          detail="Constituency issue records"
+          accent="red"
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_.55fr]">
+        <Card className="p-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">
+                Session trend
+              </div>
+
+              <h3 className="mt-1 font-display text-2xl">
+                Attendance & participation
+              </h3>
+            </div>
+
+            <Activity size={19} className="text-primary" />
+          </div>
+
+          <div className="mt-5 h-[330px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={
+                  data?.sessions ?? attendanceTrend
+                }
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  opacity={0.2}
+                />
+
+                <XAxis
+                  dataKey="session"
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={10}
+                />
+
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  fontSize={10}
+                />
+
+                <ChartTooltip />
+
+                <Legend />
+
+                <Line
+                  type="monotone"
+                  dataKey="attendance"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Attendance"
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="participation"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  dot={false}
+                  name="Participation"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">
+            Parliamentary output
+          </div>
+
+          <div className="mt-5 space-y-5">
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Questions</span>
+                <strong>{data?.metrics.questions ?? 491}</strong>
+              </div>
+
+              <div className="mt-2 h-2 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: "72%" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Debates</span>
+                <strong>{data?.metrics.debates ?? 178}</strong>
+              </div>
+
+              <div className="mt-2 h-2 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{ width: "54%" }}
+                />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Bills & committees</span>
+                <strong>{data?.metrics.bills ?? 51}</strong>
+              </div>
+
+              <div className="mt-2 h-2 rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-destructive"
+                  style={{ width: "31%" }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-7 rounded-lg bg-muted p-4 text-xs leading-5 text-muted-foreground">
+            These numbers are descriptive indicators. They should be
+            interpreted alongside source records and context.
+          </div>
+        </Card>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Card className="p-5">
+          <SectionHeading
+            eyebrow="Latest questions"
+            title="Parliamentary questions"
+            detail="Recent records available in the demo dataset."
+            action={
+              <Link
+                href="/questions"
+                className="text-xs font-semibold text-primary"
+              >
+                View all →
+              </Link>
+            }
+          />
+
+          <div className="space-y-2">
+            {questions.slice(0, 4).map((question) => (
+              <button
+                key={question.number}
+                type="button"
+                onClick={() => onQuestion(question)}
+                className="w-full rounded-lg border border-border p-4 text-left transition-colors hover:border-primary"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="font-mono-ui text-[10px] text-primary">
+                      {question.number}
+                    </div>
+
+                    <div className="mt-1 font-semibold">
+                      {question.title}
+                    </div>
+                  </div>
+
+                  <Badge
+                    tone={
+                      question.status === "Answered"
+                        ? "teal"
+                        : "saffron"
+                    }
+                  >
+                    {question.status}
+                  </Badge>
+                </div>
+
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {question.rep} · {question.constituency}
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <SectionHeading
+            eyebrow="Constituency"
+            title="Issue tracker"
+            detail="Current issue records grouped by status."
+            action={
+              <Link
+                href="/issues"
+                className="text-xs font-semibold text-primary"
+              >
+                View all →
+              </Link>
+            }
+          />
+
+          <div className="space-y-3">
+            {issues.slice(0, 5).map((issue) => (
+              <div
+                key={issue.id}
+                className="rounded-lg border border-border p-4"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-sm">
+                    {issue.title}
+                  </span>
+
+                  <Badge
+                    tone={
+                      issue.status === "Resolved"
+                        ? "teal"
+                        : issue.status === "Reported"
+                        ? "red"
+                        : "saffron"
+                    }
+                  >
+                    {issue.status}
+                  </Badge>
+                </div>
+
+                <div className="mt-2 text-xs text-muted-foreground">
+                  {issue.category} · {issue.constituency}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
 }
 
-function Dashboard({ onPai, onSource, onQuestion }: PageProps) {
-  const [, setLocation] = useLocation();
-  const { data: dashboard, isLoading, isError } = useQuery({ queryKey: ['dashboard', 'demo'], queryFn: () => apiGet<ApiDashboard>('dashboard?mode=demo') });
-  const metrics = dashboard?.metrics;
-  const sessions = dashboard?.sessions ?? [];
-  return <div className="reveal"><div className="mb-8 flex flex-wrap items-end justify-between gap-5"><div><Badge tone="saffron">{dashboard?.mode === 'demo' ? 'DEMO · ' : ''}18th Lok Sabha</Badge><h1 className="mt-4 font-display text-4xl tracking-[-.03em] sm:text-5xl">Good morning, citizen.</h1><p className="mt-2 text-sm text-muted-foreground">{dashboard?.message ?? (isLoading ? 'Loading the public record…' : isError ? 'Dashboard data is temporarily unavailable.' : 'A measured snapshot of recorded parliamentary activity.')}</p></div><div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground"><CloudSun size={16} className="text-accent" />{dashboard?.last_synced_at ? `Data refreshed ${new Date(dashboard.last_synced_at).toLocaleDateString('en-IN')}` : 'No verified sync'} <Check size={14} className="text-primary" /></div></div>
-     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Parliamentary Activity Index" value={metrics?.pai == null ? '—' : `${metrics.pai}/100`} detail="Open component breakdown" onClick={onPai} /><Metric label="Attendance" value={metrics?.attendance == null ? '—' : `${metrics.attendance}%`} detail="Database-backed session record" accent="saffron" onClick={() => setLocation('/analytics')} /><Metric label="Questions asked" value={metrics ? String(metrics.questions) : '—'} detail="Database-backed parliamentary records" onClick={() => setLocation('/questions')} /><Metric label="Active issues" value={metrics ? String(metrics.active_issues) : '—'} detail="Issues are not inferred from activity" accent="red" onClick={() => setLocation('/issues')} /></div>
-     <div className="mt-8 grid gap-5 xl:grid-cols-[1.4fr_.6fr]"><Card className="p-5 sm:p-6"><SectionHeading eyebrow="Session pulse" title="Activity over time" detail="Database-backed sessions · recorded participation signals" action={<Button variant="ghost" onClick={() => setLocation('/analytics')} testId="button-dashboard-chart-detail">Details <ArrowRight size={14} /></Button>} /><div className="h-64">{sessions.length ? <ResponsiveContainer width="100%" height="100%"><LineChart data={sessions}><CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} /><XAxis dataKey="session" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis yAxisId="left" domain={[0, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><ChartTooltip contentStyle={{ borderRadius: 10, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }} /><Legend wrapperStyle={{ fontSize: 11 }} /><Line yAxisId="left" type="monotone" dataKey="attendance" name="Attendance %" stroke="#2e7180" strokeWidth={2.5} dot={{ r: 3 }} /><Line yAxisId="right" type="monotone" dataKey="participation" name="PAI" stroke="#d99322" strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer> : <EmptyState title="No session records" text="The selected data mode has no available session records." compact />}</div></Card><Card className="p-6"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Session ledger</div><div className="mt-2 text-lg font-semibold">{sessions[0]?.session ?? 'Unavailable'}</div></div><Badge tone={dashboard?.available ? 'teal' : 'saffron'}>{dashboard?.available ? 'Current' : 'Unavailable'}</Badge></div><div className="mt-7 space-y-5">{[['Questions', metrics ? String(metrics.questions) : '—'], ['Bills introduced', metrics ? String(metrics.bills) : '—'], ['Debates recorded', metrics ? String(metrics.debates) : '—']].map(([l, v]) => <div key={l} className="flex items-end justify-between border-b border-border pb-3"><span className="text-sm text-muted-foreground">{l}</span><span className="font-display text-2xl">{v}</span></div>)}</div><Button onClick={() => setLocation('/tracker')} variant="outline" className="mt-6 w-full" testId="button-dashboard-tracker">See constituency context <ArrowRight size={14} /></Button></Card></div>
-    <div className="mt-8 grid gap-5 lg:grid-cols-[.9fr_1.1fr]"><Card className="p-6"><SectionHeading eyebrow="Latest record" title="Questions to look at" action={<Button variant="ghost" onClick={() => setLocation('/questions')} testId="button-dashboard-questions">All questions <ArrowRight size={14} /></Button>} /><div className="space-y-1">{questions.slice(0, 3).map(q => <button type="button" key={q.id} onClick={() => onQuestion(q)} data-testid={`button-dashboard-question-${q.id}`} className="flex w-full items-start gap-3 rounded-lg p-3 text-left hover:bg-muted"><span className="font-mono-ui text-[10px] text-accent">{q.number}</span><span className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5">{q.title}</span><span className="mt-1 block text-xs text-muted-foreground">{q.rep} · {q.date}</span></span><ArrowRight size={15} className="mt-1 shrink-0 text-muted-foreground" /></button>)}</div></Card><Card className="overflow-hidden"><div className="flex items-center justify-between border-b border-border p-6"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Constituency lens</div><h2 className="mt-2 font-display text-2xl">Pune, Maharashtra</h2></div><Button variant="ghost" onClick={() => setLocation('/issues')} testId="button-dashboard-issues">View issues <ArrowRight size={14} /></Button></div><div className="divide-y divide-border">{issues.slice(0, 3).map(issue => <div key={issue.id} className="flex items-center gap-4 p-5"><span className="h-9 w-1 rounded-full" style={{ background: issue.color }} /><div className="min-w-0 flex-1"><div className="text-sm font-semibold">{issue.title}</div><div className="mt-1 text-xs text-muted-foreground">{issue.category} · {issue.updated}</div></div><Badge tone={issue.status === 'In progress' ? 'teal' : issue.status === 'Proposed' ? 'saffron' : 'neutral'}>{issue.status}</Badge></div>)}</div><div className="flex items-center gap-2 border-t border-border bg-muted/40 px-6 py-3 text-[11px] text-muted-foreground"><Info size={14} />Issue records are not attributed to representatives unless a source explicitly states it.</div></Card></div></div>;
-}
+/* =========================================================
+   DIRECTORY
+   ========================================================= */
 
 function Directory() {
-  const [, setLocation] = useLocation();
-  const [query, setQuery] = useState('');
-  const [state, setState] = useState('All states');
-  const [role, setRole] = useState('All houses');
-  const filtered = representatives.filter(r => `${r.name} ${r.constituency} ${r.state}`.toLowerCase().includes(query.toLowerCase()) && (state === 'All states' || r.state === state) && (role === 'All houses' || r.role === role));
-  return <div className="reveal"><SectionHeading eyebrow="The directory" title="Representatives" detail={`${filtered.length} of ${representatives.length} demo records · Search by name, constituency or state`} action={<Button variant="outline" onClick={() => setQuery('')} testId="button-clear-directory"><X size={14} />Reset filters</Button>} /><div className="mb-6 flex flex-wrap gap-2"><div className="flex min-w-[230px] flex-1 items-center gap-2 rounded-lg border border-input bg-card px-3 py-2.5"><Search size={16} className="text-muted-foreground" /><input value={query} onChange={e => setQuery(e.target.value)} data-testid="input-search-representatives" className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground" placeholder="Search representatives..." /></div><select value={state} onChange={e => setState(e.target.value)} data-testid="select-state-filter" className="rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none"><option>All states</option>{[...new Set(representatives.map(r => r.state))].map(s => <option key={s}>{s}</option>)}</select><select value={role} onChange={e => setRole(e.target.value)} data-testid="select-house-filter" className="rounded-lg border border-input bg-card px-3 py-2.5 text-sm outline-none"><option>All houses</option><option>Lok Sabha</option><option>Rajya Sabha</option></select></div>{filtered.length === 0 ? <EmptyState title="No representatives match" text="Try a different name, state or house." onReset={() => { setQuery(''); setState('All states'); setRole('All houses'); }} /> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map((r, i) => <button type="button" onClick={() => setLocation(`/representatives/${r.id}`)} key={r.id} data-testid={`card-representative-${r.id}`} className={`reveal reveal-delay-${Math.min(i % 4, 3)} text-left`}><Card className="group overflow-hidden p-5 transition-transform hover:-translate-y-1 hover:border-primary/40"><div className="flex items-start justify-between"><span className="grid h-12 w-12 place-items-center rounded-xl text-sm font-bold text-card" style={{ background: r.color }}>{r.initials}</span><Badge tone={r.role === 'Rajya Sabha' ? 'purple' : 'teal'}>{r.role}</Badge></div><div className="mt-5"><div className="font-display text-2xl">{r.name}</div><div className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground"><MapPin size={13} />{r.constituency}, {r.state}</div></div><div className="mt-5 grid grid-cols-3 gap-3 border-t border-border pt-4"><div><div className="font-mono-ui text-[9px] text-muted-foreground">PAI</div><div className="mt-1 text-lg font-semibold text-primary">{r.pai}</div></div><div><div className="font-mono-ui text-[9px] text-muted-foreground">ATTEND.</div><div className="mt-1 text-lg font-semibold">{r.attendance}%</div></div><div><div className="font-mono-ui text-[9px] text-muted-foreground">QUESTIONS</div><div className="mt-1 text-lg font-semibold">{r.questions}</div></div></div><div className="mt-4 flex items-center justify-between text-xs text-muted-foreground"><span>{r.partyShort} · {r.term}</span><ArrowRight size={15} className="transition-transform group-hover:translate-x-1" /></div></Card></button>)}</div>}</div>;
-}
+  const [search, setSearch] = useState("");
 
-function FindRepresentativesPage() {
-  const [pincode, setPincode] = useState('');
-  const [submitted, setSubmitted] = useState('');
-  const { data, isFetching } = useQuery({
-    queryKey: ['location-resolution', submitted],
-    enabled: submitted.length === 6,
-    queryFn: () => apiGet<{
-      status: 'resolved' | 'ambiguous' | 'unavailable'; confidence: string; message: string;
-      location: { state: string | null; district: string | null; city: string | null; pincode: string | null };
-      parliamentary_constituencies: { id: number; name: string; state: string }[];
-      assembly_constituencies: { id: number; name: string; state: string }[];
-    }>(`location/resolve?pincode=${encodeURIComponent(submitted)}`),
+  const filtered = representatives.filter((rep) => {
+    const q = search.toLowerCase();
+
+    return (
+      rep.name.toLowerCase().includes(q) ||
+      rep.constituency.toLowerCase().includes(q) ||
+      rep.state.toLowerCase().includes(q) ||
+      rep.party.toLowerCase().includes(q)
+    );
   });
-  return <div className="reveal max-w-4xl"><SectionHeading eyebrow="A careful location flow" title="Find my representatives" detail="Use a PIN code to resolve geography. JanPratinidhi will show ambiguity rather than guessing when a place crosses constituency boundaries." /><Card className="p-6 sm:p-8"><div className="flex items-start gap-4"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary"><MapPin size={20} /></div><div><h2 className="font-display text-2xl">Start with your PIN code</h2><p className="mt-2 text-sm leading-6 text-muted-foreground">PIN-to-constituency mappings are source-backed and may be unavailable for some locations. No address is stored by this demo.</p></div></div><form onSubmit={e => { e.preventDefault(); if (/^\d{6}$/.test(pincode)) setSubmitted(pincode); }} className="mt-7 flex flex-col gap-3 sm:flex-row"><input inputMode="numeric" maxLength={6} value={pincode} onChange={e => setPincode(e.target.value.replace(/\D/g, ''))} data-testid="input-find-pincode" className="flex-1 rounded-lg border border-input bg-background px-4 py-3 text-sm outline-none focus:border-primary" placeholder="e.g. 411001" /><Button disabled={pincode.length !== 6} testId="button-resolve-location"><Search size={15} />Resolve location</Button></form>{isFetching && <div className="mt-6 rounded-lg bg-muted p-4 text-sm text-muted-foreground">Checking the mapped public geography…</div>}{data && <div className="mt-6 space-y-4"><div className="flex flex-wrap items-center gap-2"><Badge tone={data.status === 'resolved' ? 'teal' : data.status === 'ambiguous' ? 'saffron' : 'red'}>{data.status} · {data.confidence}</Badge><span className="text-xs text-muted-foreground">{data.location.city ?? 'Location'} · {data.location.district ?? 'District'} · {data.location.state ?? 'State'}</span></div><p className="rounded-lg border border-border bg-muted/40 p-4 text-sm leading-6 text-muted-foreground">{data.message}</p>{data.parliamentary_constituencies.length > 0 && <div><div className="mb-2 font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Parliamentary constituency options</div><div className="grid gap-2 sm:grid-cols-2">{data.parliamentary_constituencies.map(item => <div key={item.id} className="rounded-lg border border-border p-4 text-sm font-semibold">{item.name}<span className="mt-1 block text-xs font-normal text-muted-foreground">{item.state} · mapping source required</span></div>)}</div></div>}{data.assembly_constituencies.length > 0 && <div><div className="mb-2 font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Assembly constituency options</div><div className="grid gap-2 sm:grid-cols-2">{data.assembly_constituencies.map(item => <div key={item.id} className="rounded-lg border border-border p-4 text-sm font-semibold">{item.name}<span className="mt-1 block text-xs font-normal text-muted-foreground">{item.state}</span></div>)}</div></div>}</div>}</Card><div className="mt-5 grid gap-4 md:grid-cols-3">{[['1', 'Resolve geography', 'PIN → city → district → state'], ['2', 'Check mappings', 'A city can have multiple constituencies'], ['3', 'Show records', 'Only after a source-backed mapping']].map(([n, title, text]) => <Card key={n} className="p-5"><span className="font-mono-ui text-2xl text-accent">{n}</span><h3 className="mt-3 font-semibold">{title}</h3><p className="mt-2 text-xs leading-5 text-muted-foreground">{text}</p></Card>)}</div></div>;
+
+  return (
+    <div>
+      <SectionHeading
+        eyebrow="Representatives"
+        title="Browse representatives"
+        detail="Search the demo directory by representative, constituency, state or party."
+      />
+
+      <div className="mb-6">
+        <div className="relative max-w-xl">
+          <Search
+            size={17}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+          />
+
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search representatives..."
+            className="h-11 w-full rounded-lg border border-border bg-card pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary"
+          />
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <Card>
+          <EmptyState
+            title="No representatives found"
+            text="Try a different name, state, constituency or party."
+            onReset={() => setSearch("")}
+          />
+        </Card>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {filtered.map((rep) => (
+            <RepresentativeCard
+              key={rep.id}
+              rep={rep}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function Profile({ representative, onPai }: { representative: Representative; onPai: () => void }) {
+function RepresentativeCard({
+  rep,
+}: {
+  rep: Representative;
+}) {
   const [, setLocation] = useLocation();
-  const repQuestions = questions.filter(q => q.rep === representative.name);
-  return <div className="reveal"><button type="button" onClick={() => setLocation('/representatives')} data-testid="button-back-directory" className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary"><ArrowLeft size={15} />All representatives</button><div className="grid gap-5 xl:grid-cols-[.7fr_1.3fr]"><Card className="overflow-hidden"><div className="h-24 bg-sidebar paper-grid" /><div className="px-6 pb-6"><div className="-mt-8 flex items-end justify-between"><span className="grid h-16 w-16 place-items-center rounded-2xl border-4 border-card text-lg font-bold text-card" style={{ background: representative.color }}>{representative.initials}</span><Badge tone="saffron">DEMO RECORD</Badge></div><h1 className="mt-4 font-display text-4xl">{representative.name}</h1><p className="mt-1 text-sm text-muted-foreground">{representative.party} · {representative.role}</p><div className="mt-6 space-y-3 border-t border-border pt-5 text-sm"><div className="flex items-start gap-3"><MapPin size={16} className="mt-0.5 text-primary" /><span><strong>{representative.constituency}</strong><span className="block text-xs text-muted-foreground">{representative.state}</span></span></div><div className="flex items-start gap-3"><Library size={16} className="mt-0.5 text-primary" /><span><strong>Committees</strong><span className="mt-1 block text-xs leading-5 text-muted-foreground">{representative.committees.join(' · ')}</span></span></div></div><Button onClick={onPai} variant="outline" className="mt-6 w-full" testId="button-profile-pai">Understand the PAI <Info size={14} /></Button></div></Card><div className="space-y-5"><Card className="p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.17em] text-primary">Recorded activity</div><h2 className="mt-2 font-display text-3xl">A session-by-session view</h2></div><div className="rounded-lg bg-primary/5 px-4 py-3 text-right"><div className="font-mono-ui text-[10px] text-muted-foreground">PAI</div><div className="font-display text-3xl text-primary">{representative.pai}<span className="text-sm text-muted-foreground"> / 100</span></div></div></div><div className="mt-7 grid gap-3 sm:grid-cols-4">{[['Attendance', `${representative.attendance}%`, 'Budget 2024'], ['Questions', representative.questions.toString(), 'Asked in session'], ['Debates', representative.debates.toString(), 'Participations'], ['Bills', representative.bills.toString(), 'Introduced / co-sponsored']].map(([l, v, d]) => <div key={l} className="rounded-lg border border-border p-4"><div className="font-mono-ui text-[9px] uppercase text-muted-foreground">{l}</div><div className="mt-3 font-display text-3xl">{v}</div><div className="mt-1 text-[11px] text-muted-foreground">{d}</div></div>)}</div></Card><Card className="p-6"><SectionHeading eyebrow="Parliamentary questions" title={`${repQuestions.length || 0} records in this demo`} action={<Button variant="ghost" onClick={() => setLocation('/questions')} testId="button-profile-all-questions">Browse all <ArrowRight size={14} /></Button>} />{repQuestions.length ? repQuestions.map(q => <div key={q.id} className="border-t border-border py-4"><div className="flex gap-3"><span className="font-mono-ui text-[10px] text-accent">{q.number}</span><div><div className="text-sm font-semibold">{q.title}</div><div className="mt-1 text-xs text-muted-foreground">{q.ministry} · {q.date} · {q.status}</div></div></div></div>) : <div className="rounded-lg bg-muted p-4 text-sm text-muted-foreground">No question records in this sample for this representative.</div>}</Card></div></div></div>;
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        setLocation(`/representatives/${rep.id}`)
+      }
+      className="text-left"
+    >
+      <Card className="h-full p-5 transition-transform hover:-translate-y-1">
+        <div className="flex items-start justify-between gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-full bg-muted">
+            <UserRound size={22} />
+          </div>
+
+          <Badge tone="teal">{rep.house}</Badge>
+        </div>
+
+        <h3 className="mt-5 font-display text-2xl">
+          {rep.name}
+        </h3>
+
+        <p className="mt-1 text-sm text-muted-foreground">
+          {rep.party}
+        </p>
+
+        <div className="mt-5 space-y-2 text-xs">
+          <div className="flex items-center gap-2">
+            <MapPin size={14} className="text-primary" />
+            {rep.constituency}, {rep.state}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Activity size={14} className="text-primary" />
+            Attendance: {rep.attendance}%
+          </div>
+
+          <div className="flex items-center gap-2">
+            <CircleHelp size={14} className="text-primary" />
+            Questions: {rep.questions}
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center gap-2 text-xs font-semibold text-primary">
+          View record
+          <ArrowRight size={14} />
+        </div>
+      </Card>
+    </button>
+  );
 }
 
-function QuestionsPage({ onQuestion }: { onQuestion: (question: typeof questions[number]) => void }) {
-  const [query, setQuery] = useState(''); const [ministry, setMinistry] = useState('All ministries'); const [type, setType] = useState('All types');
-  const filtered = questions.filter(q => `${q.title} ${q.rep} ${q.number}`.toLowerCase().includes(query.toLowerCase()) && (ministry === 'All ministries' || q.ministry === ministry) && (type === 'All types' || q.type === type));
-  return <div className="reveal"><SectionHeading eyebrow="The question hour" title="Questions" detail="A searchable view of questions recorded in the demo session. Selecting a record opens its original context." action={<Badge tone="teal">{questions.length} records</Badge>} /><div className="mb-5 grid gap-2 md:grid-cols-[1fr_auto_auto]"><div className="flex items-center gap-2 rounded-lg border border-input bg-card px-3 py-2.5"><Search size={16} className="text-muted-foreground" /><input value={query} onChange={e => setQuery(e.target.value)} data-testid="input-search-questions" className="w-full bg-transparent text-sm outline-none" placeholder="Search question text, member or number" /></div><select value={ministry} onChange={e => setMinistry(e.target.value)} data-testid="select-ministry-filter" className="rounded-lg border border-input bg-card px-3 text-sm"><option>All ministries</option>{[...new Set(questions.map(q => q.ministry))].map(m => <option key={m}>{m}</option>)}</select><select value={type} onChange={e => setType(e.target.value)} data-testid="select-question-type" className="rounded-lg border border-input bg-card px-3 text-sm"><option>All types</option><option>Starred</option><option>Unstarred</option></select></div><Card className="overflow-hidden"><div className="hidden grid-cols-[90px_1fr_180px_120px] gap-4 border-b border-border bg-muted/50 px-5 py-3 font-mono-ui text-[9px] uppercase tracking-[.14em] text-muted-foreground md:grid"><span>Record</span><span>Question</span><span>Ministry</span><span>Status</span></div>{filtered.map(q => <button type="button" key={q.id} onClick={() => onQuestion(q)} data-testid={`button-question-${q.id}`} className="grid w-full gap-2 border-b border-border px-5 py-4 text-left transition-colors last:border-0 hover:bg-muted/50 md:grid-cols-[90px_1fr_180px_120px] md:items-center md:gap-4"><span className="font-mono-ui text-[10px] text-accent">{q.number}<span className="mt-1 block text-[9px] text-muted-foreground">{q.type}</span></span><span><span className="block text-sm font-semibold">{q.title}</span><span className="mt-1 block text-xs text-muted-foreground">{q.rep} · {q.constituency} · {q.date}</span></span><span className="text-xs text-muted-foreground">{q.ministry}</span><span><Badge tone={q.status === 'Answered' ? 'teal' : 'saffron'}>{q.status}</Badge></span></button>)}{!filtered.length && <EmptyState title="No question records found" text="Try changing the search or ministry filters." compact />}</Card></div>;
+/* =========================================================
+   SETTINGS
+   ========================================================= */
+
+function SettingsPage({
+  theme,
+  setTheme,
+  loggedIn,
+  setLoggedIn,
+}: {
+  theme: boolean;
+  setTheme: (v: boolean) => void;
+  loggedIn: boolean;
+  setLoggedIn: (v: boolean) => void;
+}) {
+  return (
+    <div>
+      <SectionHeading
+        eyebrow="Preferences"
+        title="Settings"
+        detail="Control your workspace preferences."
+      />
+
+      <div className="max-w-3xl space-y-5">
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-5">
+            <div>
+              <h3 className="font-display text-2xl">
+                Appearance
+              </h3>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Switch between light and dark mode.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setTheme(!theme)}
+              data-testid="button-settings-toggle-theme"
+              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-semibold"
+            >
+              {theme ? (
+                <>
+                  <Sun size={16} />
+                  Light mode
+                </>
+              ) : (
+                <>
+                  <Moon size={16} />
+                  Dark mode
+                </>
+              )}
+            </button>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center justify-between gap-5">
+            <div>
+              <h3 className="font-display text-2xl">
+                Account
+              </h3>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                Demo authentication state for the prototype.
+              </p>
+            </div>
+
+            <Button
+              onClick={() => setLoggedIn(!loggedIn)}
+              variant={loggedIn ? "danger" : "outline"}
+              testId="button-settings-login"
+            >
+              {loggedIn ? (
+                <>
+                  <LogOut size={15} />
+                  Sign out
+                </>
+              ) : (
+                <>
+                  <LogIn size={15} />
+                  Sign in
+                </>
+              )}
+            </Button>
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <Database size={18} className="text-primary" />
+
+            <div>
+              <h3 className="font-display text-2xl">
+                Data mode
+              </h3>
+
+              <p className="mt-1 text-sm text-muted-foreground">
+                The current standalone prototype uses clearly labelled
+                demonstration records.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-lg bg-muted p-4 text-xs leading-6 text-muted-foreground">
+            Public source integration should be added only when the relevant
+            government/public data source is actually connected and verified.
+          </div>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button
+            variant="primary"
+            testId="button-save-settings"
+          >
+            <Check size={15} />
+            Save preferences
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-function IssuesPage() {
-  const [items, setItems] = useState(issues); const [status, setStatus] = useState('All statuses'); const [query, setQuery] = useState(''); const [showClassify, setShowClassify] = useState(false);
-  const statuses = ['All statuses', 'Proposed', 'In progress', 'Monitoring', 'Reported'];
-  const filtered = items.filter(i => `${i.title} ${i.location} ${i.category}`.toLowerCase().includes(query.toLowerCase()) && (status === 'All statuses' || i.status === status));
-  return <div className="reveal"><SectionHeading eyebrow="Constituency context" title="Issues & signals" detail="Local records are shown as context. They are not automatically attributed to a representative." action={<Button onClick={() => setShowClassify(true)} variant="secondary" testId="button-open-classifier"><Sparkles size={15} />Try classification demo</Button>} /><div className="mb-6 flex flex-wrap gap-2"><div className="flex min-w-[230px] flex-1 items-center gap-2 rounded-lg border border-input bg-card px-3 py-2.5"><Search size={16} className="text-muted-foreground" /><input value={query} onChange={e => setQuery(e.target.value)} data-testid="input-search-issues" className="w-full bg-transparent text-sm outline-none" placeholder="Search issues, place or category" /></div>{statuses.map(s => <button type="button" key={s} onClick={() => setStatus(s)} data-testid={`button-status-filter-${s.toLowerCase().replaceAll(' ', '-')}`} className={`rounded-lg border px-3 py-2 text-xs font-semibold ${status === s ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground'}`}>{s}</button>)}</div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{filtered.map(issue => <Card key={issue.id} className="overflow-hidden"><div className="h-1.5" style={{ background: issue.color }} /><div className="p-5"><div className="flex items-start justify-between gap-3"><Badge tone="neutral">{issue.category}</Badge><select value={issue.status} onChange={e => setItems(current => current.map(x => x.id === issue.id ? { ...x, status: e.target.value } : x))} data-testid={`select-issue-status-${issue.id}`} className="rounded-md border-0 bg-muted px-2 py-1 text-[10px] font-bold uppercase tracking-[.06em] outline-none"><option>Proposed</option><option>In progress</option><option>Monitoring</option><option>Reported</option></select></div><h2 className="mt-5 font-display text-2xl leading-tight">{issue.title}</h2><div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground"><MapPin size={13} />{issue.location}</div><p className="mt-5 text-sm leading-6 text-muted-foreground">{issue.note}</p><div className="mt-5 border-t border-border pt-4 text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">Record:</span> {issue.source}<span className="mx-2 text-border">·</span>{issue.updated}</div></div></Card>)}</div>{showClassify && <Modal title="AI-assisted classification" onClose={() => setShowClassify(false)} testId="dialog-classification"><div className="rounded-lg border border-accent/40 bg-accent/10 p-4"><div className="flex items-center gap-2 text-sm font-semibold"><Sparkles size={16} className="text-accent" />Experimental feature</div><p className="mt-2 text-xs leading-5 text-muted-foreground">This demo suggests a category from issue text. It is not a factual determination, does not infer political responsibility, and should be reviewed against the source.</p></div><label className="mt-5 block text-xs font-semibold">Paste a public issue description<textarea data-testid="textarea-classification" className="mt-2 min-h-28 w-full rounded-lg border border-input bg-background p-3 text-sm outline-none" placeholder="Example: buses are infrequent after 8pm in Ward 12..." /></label><div className="mt-4 rounded-lg bg-muted p-4 text-sm"><div className="font-mono-ui text-[10px] uppercase tracking-[.12em] text-muted-foreground">Suggested label</div><div className="mt-2 flex items-center gap-2 font-semibold"><span className="h-2.5 w-2.5 rounded-full bg-primary" />Transport <Badge tone="saffron">experimental · 0.82</Badge></div></div><Button onClick={() => setShowClassify(false)} className="mt-5 w-full" testId="button-close-classifier">Done</Button></Modal>}</div>;
+/* =========================================================
+   EMPTY STATE
+   ========================================================= */
+
+function EmptyState({
+  title,
+  text,
+  onReset,
+  compact = false,
+}: {
+  title: string;
+  text: string;
+  onReset?: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      data-testid="empty-state"
+      className={`grid place-items-center text-center ${
+        compact ? "p-12" : "min-h-64 p-10"
+      }`}
+    >
+      <div className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground">
+        <ListFilter size={20} />
+      </div>
+
+      <h3 className="mt-4 font-display text-2xl">
+        {title}
+      </h3>
+
+      <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+        {text}
+      </p>
+
+      {onReset && (
+        <Button
+          onClick={onReset}
+          variant="outline"
+          className="mt-5"
+          testId="button-empty-reset"
+        >
+          Reset filters
+        </Button>
+      )}
+    </div>
+  );
 }
 
-function TrackerPage({ onSource }: { onSource: (source: typeof sources[number]) => void }) {
-  const [filter, setFilter] = useState('All projects');
-  const filters = ['All projects', 'Pune', 'Mysuru', 'Madurai', 'Srinagar'];
-  const visibleProjects = filter === 'All projects' ? projects : projects.filter(project => project.district === filter);
-  return <div className="reveal"><SectionHeading eyebrow="Follow the paper trail" title="Development tracker" detail="Publicly documented projects by district and ministry. Representative attribution is displayed only where a source states it." action={<Button variant="outline" onClick={() => onSource(sources[3])} testId="button-tracker-source"><Database size={14} />Methodology</Button>} /><div className="mb-6 flex gap-3 overflow-x-auto pb-1">{filters.map((s, i) => <button type="button" key={s} onClick={() => setFilter(s)} data-testid={`button-tracker-filter-${i}`} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-xs font-semibold ${filter === s ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground'}`}>{s}</button>)}</div><div className="grid gap-5 xl:grid-cols-[1.1fr_.9fr]"><Card className="overflow-hidden"><div className="grid grid-cols-[1fr_130px_130px] border-b border-border bg-muted/50 px-5 py-3 font-mono-ui text-[9px] uppercase tracking-[.12em] text-muted-foreground"><span>Project / district</span><span>Stage</span><span>Amount</span></div>{visibleProjects.map((project, i) => <div key={project.name} data-testid={`row-project-${i}`} className="grid grid-cols-[1fr_130px_130px] items-center border-b border-border px-5 py-5 last:border-0"><div><div className="text-sm font-semibold">{project.name}</div><div className="mt-1 text-xs text-muted-foreground">{project.district} · {project.ministry}</div><div className="mt-2 text-[10px] text-muted-foreground">Source: {project.source}</div></div><Badge tone={project.stage === 'Implementation' ? 'teal' : project.stage === 'Sanctioned' ? 'saffron' : 'neutral'}>{project.stage}</Badge><span className="font-mono-ui text-sm">{project.amount}</span></div>)}{!visibleProjects.length && <EmptyState title="No projects in this district" text="Try another district filter." compact />}</Card><Card className="p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Project stages</div><div className="mt-6 space-y-5">{[['Feasibility study', 8, 'bg-[#6d5b83]'], ['Sanctioned', 5, 'bg-accent'], ['Tender awarded', 3, 'bg-[#4e6791]'], ['Implementation', 2, 'bg-primary']].map(([label, value, color]) => <div key={label as string}><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono-ui text-xs text-muted-foreground">{value}</span></div><div className="mt-2 h-2 rounded-full bg-muted"><div className={`h-full rounded-full ${color}`} style={{ width: `${Number(value) * 8 + 10}%` }} /></div></div>)}</div><div className="mt-8 rounded-lg border border-border p-4 text-xs leading-5 text-muted-foreground"><Info size={14} className="mb-2 text-primary" />Projects can have multiple institutional owners. A public release does not by itself establish who initiated or delivered a project.</div></Card></div></div>;
-}
-
-function AnalyticsPage({ onPai }: { onPai: () => void }) {
-  const pieData = [{ name: 'Questions', value: 491 }, { name: 'Debates', value: 164 }, { name: 'Bills', value: 37 }, { name: 'Committees', value: 82 }];
-  const colors = ['#2e7180', '#d99322', '#4e6791', '#3d7b69'];
-  return <div className="reveal"><SectionHeading eyebrow="Read the signals" title="Analytics" detail="Descriptive views across the local demo dataset. Use the tooltip to inspect each session." action={<Button onClick={onPai} variant="outline" testId="button-analytics-pai">How PAI works <Info size={14} /></Button>} /><div className="grid gap-5 xl:grid-cols-[1.35fr_.65fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Participation trend</div><h2 className="mt-2 font-display text-2xl">Presence and public questions</h2></div><Badge tone="teal">5 sessions</Badge></div><div className="mt-6 h-72"><ResponsiveContainer width="100%" height="100%"><AreaChart data={attendanceTrend}><defs><linearGradient id="attendFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#2e7180" stopOpacity=".2" /><stop offset="100%" stopColor="#2e7180" stopOpacity="0" /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" /><XAxis dataKey="session" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis yAxisId="left" domain={[40, 100]} tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} /><ChartTooltip contentStyle={{ borderRadius: 10, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }} /><Legend wrapperStyle={{ fontSize: 11 }} /><Area yAxisId="left" type="monotone" dataKey="attendance" name="Attendance %" stroke="#2e7180" fill="url(#attendFill)" strokeWidth={2.5} /><Line yAxisId="right" type="monotone" dataKey="questions" name="Questions" stroke="#d99322" strokeWidth={2} /></AreaChart></ResponsiveContainer></div></Card><Card className="p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Recorded volume</div><h2 className="mt-2 font-display text-2xl">Activity mix</h2><div className="h-56"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={53} outerRadius={80} paddingAngle={3} dataKey="value">{pieData.map((entry, index) => <Cell key={entry.name} fill={colors[index]} />)}</Pie><ChartTooltip contentStyle={{ borderRadius: 10, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }} /></PieChart></ResponsiveContainer></div><div className="grid grid-cols-2 gap-3">{pieData.map((d, i) => <div key={d.name} className="flex items-center gap-2 text-xs"><span className="h-2 w-2 rounded-full" style={{ background: colors[i] }} />{d.name}<span className="ml-auto font-mono-ui">{d.value}</span></div>)}</div></Card></div><div className="mt-5 grid gap-5 lg:grid-cols-2"><Card className="p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Member comparison</div><h2 className="mt-2 font-display text-2xl">Attendance by representative</h2><div className="mt-5 h-64"><ResponsiveContainer width="100%" height="100%"><BarChart data={representatives} layout="vertical" margin={{ left: 10, right: 18 }}><CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" /><XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} /><YAxis dataKey="name" type="category" width={112} tick={{ fontSize: 10 }} /><ChartTooltip contentStyle={{ borderRadius: 10, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))', fontSize: 12 }} /><Bar dataKey="attendance" name="Attendance %" fill="#2e7180" radius={[0, 4, 4, 0]} /></BarChart></ResponsiveContainer></div></Card><Card className="p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">How to read</div><h2 className="mt-2 font-display text-2xl">Numbers are not verdicts.</h2><p className="mt-4 text-sm leading-6 text-muted-foreground">A count of questions tells you something about recorded participation, not necessarily the quality of a question or its outcome. Analytics intentionally avoids a single leaderboard.</p><div className="mt-6 space-y-3 text-sm"><div className="flex items-center gap-3 rounded-lg bg-muted p-3"><Eye size={16} className="text-primary" />Hover a chart mark to inspect the source metric.</div><div className="flex items-center gap-3 rounded-lg bg-muted p-3"><ShieldCheck size={16} className="text-primary" />All demo records carry a review date.</div></div></Card></div></div>;
-}
-
-function ComparePage() {
-  const [selected, setSelected] = useState(['r1', 'r3']);
-  const chosen = representatives.filter(r => selected.includes(r.id));
-  const toggle = (id: string) => setSelected(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev.length < 3 ? [...prev, id] : prev);
-  const compareRows: [string, (r: Representative) => string | number][] = [
-    ['House / constituency', r => `${r.role} · ${r.constituency}`],
-    ['PAI (composite)', r => `${r.pai} / 100`],
-    ['Attendance', r => `${r.attendance}%`],
-    ['Questions asked', r => r.questions],
-    ['Debate participations', r => r.debates],
-    ['Bills recorded', r => r.bills],
-  ];
-  return <div className="reveal"><SectionHeading eyebrow="Side by side, without ranking" title="Compare representatives" detail="Select up to three records to compare recorded activity in the current demo session." action={<Badge tone="saffron">{selected.length} / 3 selected</Badge>} /><Card className="mb-5 p-5"><div className="flex flex-wrap gap-2">{representatives.map(r => <button type="button" key={r.id} onClick={() => toggle(r.id)} data-testid={`button-compare-select-${r.id}`} className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${selected.includes(r.id) ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-card text-muted-foreground'}`}><span className="grid h-5 w-5 place-items-center rounded text-[9px] font-bold text-card" style={{ background: r.color }}>{r.initials}</span>{r.name}{selected.includes(r.id) && <Check size={13} />}</button>)}</div></Card>{chosen.length ? <Card className="overflow-hidden"><div className="grid min-w-[580px] grid-cols-[170px_repeat(3,1fr)] border-b border-border bg-muted/50 px-5 py-4 font-mono-ui text-[9px] uppercase tracking-[.12em] text-muted-foreground"><span>Recorded measure</span>{chosen.map(r => <span key={r.id}>{r.name}</span>)}</div>{compareRows.map(([label, fn]) => <div key={label} className="grid min-w-[580px] grid-cols-[170px_repeat(3,1fr)] items-center border-b border-border px-5 py-5 last:border-0"><span className="text-sm text-muted-foreground">{label}</span>{chosen.map(r => <span key={r.id} className="text-sm font-semibold">{fn(r)}</span>)}</div>)}</Card> : <EmptyState title="Choose records to compare" text="Select representatives above to build a side-by-side view." />}</div>;
-}
-
-function FeedbackPage({ loggedIn, setLoggedIn }: { loggedIn: boolean; setLoggedIn: (v: boolean) => void }) {
-  const [sent, setSent] = useState(false); const [message, setMessage] = useState('');
-  return <div className="reveal"><SectionHeading eyebrow="A listening channel" title="Citizen feedback" detail="Help us correct source links, add context and make the record easier to use." /><div className="grid gap-5 lg:grid-cols-[.75fr_1.25fr]"><Card className="p-6"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-lg bg-accent/20 text-accent-foreground"><MessageSquareText size={19} /></div><div><div className="font-semibold">Make the record better</div><div className="text-xs text-muted-foreground">No political endorsement or campaign messages.</div></div></div><div className="mt-7 space-y-4"><label className="block text-xs font-semibold">What is this about?<select data-testid="select-feedback-topic" className="mt-2 w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm"><option>Source correction</option><option>Constituency issue</option><option>Accessibility</option><option>Other</option></select></label><label className="block text-xs font-semibold">Constituency or record<textarea data-testid="textarea-feedback" value={message} onChange={e => setMessage(e.target.value)} className="mt-2 min-h-32 w-full rounded-lg border border-input bg-background p-3 text-sm outline-none" placeholder="Tell us what you noticed..." /></label>{!loggedIn && <div className="rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground">You are in public demo mode. Feedback can be submitted locally; sign in is simulated and does not create an account.</div>}{sent && <div className="flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary"><Check size={16} />Saved to the local demo inbox.</div>}<Button disabled={!message.trim()} onClick={() => { setSent(true); setMessage(''); }} className="w-full" testId="button-submit-feedback"><Mail size={15} />Submit feedback</Button></div></Card><Card className="overflow-hidden"><div className="border-b border-border p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Local demo inbox</div><h2 className="mt-2 font-display text-2xl">Recent notes</h2></div><div className="divide-y divide-border">{feedback.map(f => <div key={f.id} data-testid={`feedback-row-${f.id}`} className="p-5"><div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold">{f.topic} · {f.constituency}</span><Badge tone={f.status === 'New' ? 'saffron' : 'neutral'}>{f.status}</Badge></div><p className="mt-3 text-sm leading-6 text-muted-foreground">“{f.message}”</p><div className="mt-3 font-mono-ui text-[10px] text-muted-foreground">{f.date}</div></div>)}</div></Card></div></div>;
-}
-
-function SourcesPage({ onSource }: { onSource: (source: typeof sources[number]) => void }) {
-  return <div className="reveal"><SectionHeading eyebrow="Provenance first" title="Data sources" detail="A source register for the demo dataset. Review states are descriptive and change as links are checked." action={<Badge tone="teal"><ShieldCheck size={12} className="mr-1" />5 source groups</Badge>} /><Card className="overflow-hidden"><div className="hidden grid-cols-[1.25fr_.8fr_1fr_120px] gap-4 border-b border-border bg-muted/50 px-5 py-3 font-mono-ui text-[9px] uppercase tracking-[.12em] text-muted-foreground md:grid"><span>Source</span><span>Type</span><span>Coverage</span><span>Review</span></div>{sources.map((source, i) => <button type="button" onClick={() => onSource(source)} key={source.name} data-testid={`button-source-${i}`} className="grid w-full gap-3 border-b border-border px-5 py-5 text-left last:border-0 hover:bg-muted/50 md:grid-cols-[1.25fr_.8fr_1fr_120px] md:items-center md:gap-4"><span><span className="flex items-center gap-2 text-sm font-semibold">{source.name}<ExternalLink size={13} className="text-muted-foreground" /></span><span className="mt-1 block font-mono-ui text-[10px] text-primary">{source.url}</span></span><span className="text-xs text-muted-foreground">{source.type}</span><span className="text-xs text-muted-foreground">{source.coverage}</span><span><Badge tone={source.status === 'Verified' ? 'teal' : source.status === 'Reviewed' ? 'saffron' : 'red'}>{source.status}</Badge></span></button>)}</Card><div className="mt-5 grid gap-4 md:grid-cols-3">{[['Last refreshed', '18 Jun 2024', 'Records are local to this prototype.'], ['Attribution rule', 'Explicit only', 'A source must state a relationship.'], ['Review cadence', 'Per release', 'Stewards review changed public records.']].map(([l, v, d]) => <Card key={l} className="p-5"><div className="font-mono-ui text-[10px] uppercase tracking-[.14em] text-muted-foreground">{l}</div><div className="mt-3 font-display text-2xl">{v}</div><p className="mt-2 text-xs leading-5 text-muted-foreground">{d}</p></Card>)}</div></div>;
-}
-
-function AdminPage() {
-  const [imported, setImported] = useState(false);
-  return <div className="reveal"><SectionHeading eyebrow="Steward workspace" title="Admin / data management" detail="Controls are simulated locally for this prototype. No records leave your browser." action={<Badge tone="saffron">LOCAL ONLY</Badge>} /><div className="grid gap-5 lg:grid-cols-[1fr_.8fr]"><Card className="p-6"><div className="flex items-center justify-between"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Import queue</div><h2 className="mt-2 font-display text-2xl">Public record updates</h2></div><Button onClick={() => setImported(true)} testId="button-run-import"><Zap size={15} />Run mock import</Button></div>{imported && <div className="mt-5 flex items-center gap-2 rounded-lg bg-primary/10 p-3 text-sm text-primary"><Check size={15} />Import complete · 12 records staged for review</div>}<div className="mt-6 space-y-2">{[['Parliamentary questions', '491 records', 'Synced'], ['Member attendance', '8 records', 'Synced'], ['Development projects', '18 records', 'Needs review'], ['Feedback submissions', '3 records', 'Synced']].map(([a, b, c], i) => <div key={a} data-testid={`admin-queue-${i}`} className="flex items-center gap-3 rounded-lg border border-border p-4"><Database size={16} className="text-muted-foreground" /><span className="flex-1 text-sm font-semibold">{a}<span className="ml-2 text-xs font-normal text-muted-foreground">{b}</span></span><Badge tone={c === 'Synced' ? 'teal' : 'saffron'}>{c}</Badge></div>)}</div></Card><Card className="p-6"><div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">Data quality</div><h2 className="mt-2 font-display text-2xl">Before publication</h2><div className="mt-6 space-y-5">{[['Source URLs checked', 94], ['Constituency labels mapped', 100], ['Attribution reviewed', 88]].map(([label, value]) => <div key={label as string}><div className="flex justify-between text-sm"><span>{label}</span><span className="font-mono-ui text-xs">{value}%</span></div><div className="mt-2 h-2 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${value}%` }} /></div></div>)}</div><div className="mt-7 rounded-lg border border-accent/40 bg-accent/10 p-4 text-xs leading-5 text-muted-foreground"><ShieldCheck size={15} className="mb-2 text-accent-foreground" />A steward must review a changed source before its status becomes verified.</div></Card></div></div>;
-}
-
-function AuditPage() {
-  return <div className="reveal"><SectionHeading eyebrow="Accountability layer" title="Audit log" detail="A chronological record of local data-management actions in the demo workspace." action={<Button variant="outline" onClick={() => window.print()} testId="button-print-audit"><FileCheck2 size={14} />Print log</Button>} /><Card className="overflow-hidden"><div className="divide-y divide-border">{auditEntries.map((entry, i) => <div key={entry.time} data-testid={`audit-entry-${i}`} className="grid gap-4 p-5 sm:grid-cols-[170px_1fr]"><div className="font-mono-ui text-[10px] leading-5 text-muted-foreground">{entry.time}</div><div className="relative border-l border-border pl-5"><span className="absolute -left-[5px] top-1 h-2 w-2 rounded-full bg-primary" /><div className="text-sm font-semibold">{entry.action}</div><div className="mt-1 text-sm text-primary">{entry.target}</div><p className="mt-2 text-xs leading-5 text-muted-foreground">{entry.detail}</p><div className="mt-3 inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[.1em] text-muted-foreground"><UserRound size={12} />{entry.actor}</div></div></div>)}</div></Card></div>;
-}
-
-function AboutPage() {
-  const [, setLocation] = useLocation();
-  const principles: [string, string, IconType][] = [
-    ['Our boundary', 'We describe what a record says. We do not infer motivation, quality or political responsibility.', ShieldCheck],
-    ['Our language', '“Recorded”, “reported” and “listed” are deliberate. They keep evidence and interpretation apart.', BookOpen],
-    ['Our invitation', 'Read the source, notice what is missing and send a correction when the record needs one.', ThumbsUp],
-  ];
-  return <div className="reveal"><div className="max-w-3xl"><Badge tone="saffron">A civic-tech prototype</Badge><h1 className="mt-5 font-display text-5xl leading-[.95] tracking-[-.04em] sm:text-7xl">Make public work easier to <em className="text-primary">follow.</em></h1><p className="mt-7 text-lg leading-8 text-muted-foreground">JanPratinidhi is a neutral interface for navigating public parliamentary records and constituency context. It does not score people, predict outcomes or speak for a party.</p></div><div className="mt-16 grid gap-5 md:grid-cols-3">{principles.map(([title, text, Icon]) => <Card key={title} className="p-6"><Icon size={22} className="text-primary" /><h2 className="mt-5 font-display text-2xl">{title}</h2><p className="mt-3 text-sm leading-6 text-muted-foreground">{text}</p></Card>)}</div><Card className="mt-5 flex flex-wrap items-center justify-between gap-5 bg-sidebar p-7 text-sidebar-foreground"><div><div className="font-mono-ui text-[10px] uppercase tracking-[.18em] text-accent">Build note</div><h2 className="mt-2 font-display text-3xl">The prototype is intentionally inspectable.</h2><p className="mt-2 max-w-xl text-sm leading-6 text-sidebar-foreground/60">All demo content is local TypeScript data. Follow the source register and audit log to see how a production version could stay accountable.</p></div><Button variant="secondary" onClick={() => setLocation('/sources')} testId="button-about-sources">Read the source register <ArrowRight size={15} /></Button></Card></div>;
-}
-
-function SettingsPage({ theme, setTheme, loggedIn, setLoggedIn }: { theme: boolean; setTheme: (v: boolean) => void; loggedIn: boolean; setLoggedIn: (v: boolean) => void }) {
-  const [compact, setCompact] = useState(false); const [updates, setUpdates] = useState(true); const [saved, setSaved] = useState(false);
-  return <div className="reveal max-w-3xl"><SectionHeading eyebrow="Workspace preferences" title="Settings" detail="These controls are saved for this local browser session only." /><Card className="divide-y divide-border"><div className="flex items-center gap-4 p-6"><div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary"><Sun size={18} /></div><div className="flex-1"><div className="font-semibold">Appearance</div><div className="mt-1 text-xs text-muted-foreground">Switch between the parchment light theme and deep ink dark theme.</div></div><button type="button" onClick={() => setTheme(!theme)} data-testid="switch-settings-theme" className={`relative h-6 w-11 rounded-full transition-colors ${theme ? 'bg-primary' : 'bg-muted-foreground/40'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-card transition-transform ${theme ? 'left-6' : 'left-1'}`} /></button></div><div className="flex items-center gap-4 p-6"><div className="grid h-10 w-10 place-items-center rounded-lg bg-accent/20 text-accent-foreground"><PanelLeftClose size={18} /></div><div className="flex-1"><div className="font-semibold">Compact density</div><div className="mt-1 text-xs text-muted-foreground">Reduce whitespace in tables and the sidebar for smaller screens.</div></div><button type="button" onClick={() => setCompact(!compact)} data-testid="switch-settings-density" className={`relative h-6 w-11 rounded-full transition-colors ${compact ? 'bg-primary' : 'bg-muted-foreground/40'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-card transition-transform ${compact ? 'left-6' : 'left-1'}`} /></button></div><div className="flex items-center gap-4 p-6"><div className="grid h-10 w-10 place-items-center rounded-lg bg-primary/10 text-primary"><Bell size={18} /></div><div className="flex-1"><div className="font-semibold">Data refresh notes</div><div className="mt-1 text-xs text-muted-foreground">Show a small note when a local dataset has been refreshed.</div></div><button type="button" onClick={() => setUpdates(!updates)} data-testid="switch-settings-updates" className={`relative h-6 w-11 rounded-full transition-colors ${updates ? 'bg-primary' : 'bg-muted-foreground/40'}`}><span className={`absolute top-1 h-4 w-4 rounded-full bg-card transition-transform ${updates ? 'left-6' : 'left-1'}`} /></button></div><div className="flex items-center gap-4 p-6"><div className="grid h-10 w-10 place-items-center rounded-lg bg-muted text-muted-foreground"><UserRound size={18} /></div><div className="flex-1"><div className="font-semibold">Local citizen session</div><div className="mt-1 text-xs text-muted-foreground">{loggedIn ? 'Signed in as Citizen view.' : 'No local session is active.'}</div></div><Button variant="outline" onClick={() => setLoggedIn(!loggedIn)} testId="button-settings-session">{loggedIn ? 'Sign out' : 'Sign in locally'}</Button></div></Card><div className="mt-5 flex items-center justify-between rounded-xl border border-border bg-card p-5"><span className="text-sm text-muted-foreground">{saved ? 'Preferences saved for this session.' : 'Changes apply immediately.'}</span><Button onClick={() => setSaved(true)} testId="button-save-settings"><Check size={15} />Save preferences</Button></div></div>;
-}
-
-function EmptyState({ title, text, onReset, compact = false }: { title: string; text: string; onReset?: () => void; compact?: boolean }) {
-  return <div data-testid="empty-state" className={`grid place-items-center text-center ${compact ? 'p-12' : 'min-h-64 p-10'}`}><div className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground"><ListFilter size={20} /></div><h3 className="mt-4 font-display text-2xl">{title}</h3><p className="mt-2 max-w-sm text-sm text-muted-foreground">{text}</p>{onReset && <Button onClick={onReset} variant="outline" className="mt-5" testId="button-empty-reset">Reset filters</Button>}</div>;
-}
+/* =========================================================
+   PAI MODAL
+   ========================================================= */
 
 function PaiModal({ onClose }: { onClose: () => void }) {
-  const parts = [['Presence', '31 / 40', 'Attendance across recorded sittings'], ['Questions', '20 / 25', 'Questions recorded in the session'], ['Debate participation', '15 / 20', 'Debate interventions recorded'], ['Bills & committees', '12 / 15', 'Bills and committee activity']]; return <Modal title="Parliamentary Activity Index" onClose={onClose} testId="dialog-pai"><div className="flex items-end gap-4 rounded-xl bg-primary/5 p-5"><div className="font-display text-6xl text-primary">78</div><div className="pb-2 font-mono-ui text-xs text-muted-foreground">/ 100<br />composite signal</div></div><p className="mt-5 text-sm leading-6 text-muted-foreground">PAI is a transparent descriptive composite designed to help scan a public record. It is not a rating, quality assessment or prediction. Weighting is fixed for this prototype and will be published alongside any production release.</p><div className="mt-6 space-y-4">{parts.map(([label, score, desc]) => <div key={label}><div className="flex items-center justify-between text-sm font-semibold"><span>{label}</span><span className="font-mono-ui text-xs text-primary">{score}</span></div><p className="mt-1 text-xs text-muted-foreground">{desc}</p><div className="mt-2 h-1.5 rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${(Number(score.split(' / ')[0]) / Number(score.split(' / ')[1])) * 100}%` }} /></div></div>)}</div><div className="mt-6 flex items-center gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground"><Info size={14} className="text-accent" />Component scores are rounded. Source records remain the authority.</div></Modal>;
+  const parts = [
+    [
+      "Presence",
+      "31 / 40",
+      "Attendance across recorded sittings",
+    ],
+    [
+      "Questions",
+      "20 / 25",
+      "Questions recorded in the session",
+    ],
+    [
+      "Debate participation",
+      "15 / 20",
+      "Debate interventions recorded",
+    ],
+    [
+      "Bills & committees",
+      "12 / 15",
+      "Bills and committee activity",
+    ],
+  ];
+
+  return (
+    <Modal
+      title="Parliamentary Activity Index"
+      onClose={onClose}
+      testId="dialog-pai"
+    >
+      <div className="flex items-end gap-4 rounded-xl bg-primary/5 p-5">
+        <div className="font-display text-6xl text-primary">
+          78
+        </div>
+
+        <div className="pb-2 font-mono-ui text-xs text-muted-foreground">
+          / 100
+          <br />
+          composite signal
+        </div>
+      </div>
+
+      <p className="mt-5 text-sm leading-6 text-muted-foreground">
+        PAI is a transparent descriptive composite designed to help scan a
+        public record. It is not a rating, quality assessment or prediction.
+      </p>
+
+      <div className="mt-6 space-y-4">
+        {parts.map(([label, score, desc]) => (
+          <div key={label}>
+            <div className="flex items-center justify-between text-sm font-semibold">
+              <span>{label}</span>
+
+              <span className="font-mono-ui text-xs text-primary">
+                {score}
+              </span>
+            </div>
+
+            <p className="mt-1 text-xs text-muted-foreground">
+              {desc}
+            </p>
+
+            <div className="mt-2 h-1.5 rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{
+                  width: `${
+                    (Number(score.split(" / ")[0]) /
+                      Number(score.split(" / ")[1])) *
+                    100
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 flex items-center gap-2 border-t border-border pt-4 text-[11px] text-muted-foreground">
+        <Info size={14} className="text-accent" />
+        Component scores are rounded. Source records remain the authority.
+      </div>
+    </Modal>
+  );
 }
 
-function AppRouter({ theme, setTheme, loggedIn, setLoggedIn }: { theme: boolean; setTheme: (v: boolean) => void; loggedIn: boolean; setLoggedIn: (v: boolean) => void }) {
-  const [location, setLocation] = useLocation(); const [paiOpen, setPaiOpen] = useState(false); const [source, setSource] = useState<typeof sources[number] | null>(null); const [question, setQuestion] = useState<typeof questions[number] | null>(null);
-  const openSource = (s: typeof sources[number]) => setSource(s);
-  const path = location.split('?')[0];
+/* =========================================================
+   APP ROUTER
+   ========================================================= */
+
+function AppRouter({
+  theme,
+  setTheme,
+  loggedIn,
+  setLoggedIn,
+}: {
+  theme: boolean;
+  setTheme: (v: boolean) => void;
+  loggedIn: boolean;
+  setLoggedIn: (v: boolean) => void;
+}) {
+  const [location, setLocation] = useLocation();
+
+  const [paiOpen, setPaiOpen] = useState(false);
+
+  const [source, setSource] =
+    useState<typeof sources[number] | null>(null);
+
+  const [question, setQuestion] =
+    useState<typeof questions[number] | null>(null);
+
+  const path = location.split("?")[0];
+
   let page: ReactNode;
-  if (path === '/') page = <Landing onSource={openSource} />;
-  else if (path === '/dashboard') page = <Dashboard onPai={() => setPaiOpen(true)} onSource={openSource} onQuestion={setQuestion} />;
-  else if (path === '/representatives') page = <Directory />;
-  else if (path === '/find-representatives') page = <FindRepresentativesPage />;
-  else if (path.startsWith('/representatives/')) { const rep = representatives.find(r => r.id === path.split('/')[2]) || representatives[0]; page = <Profile representative={rep} onPai={() => setPaiOpen(true)} />; }
-  else if (path === '/questions') page = <QuestionsPage onQuestion={setQuestion} />;
-  else if (path === '/issues') page = <IssuesPage />;
-  else if (path === '/tracker') page = <TrackerPage onSource={openSource} />;
-  else if (path === '/analytics') page = <AnalyticsPage onPai={() => setPaiOpen(true)} />;
-  else if (path === '/compare') page = <ComparePage />;
-  else if (path === '/feedback') page = <FeedbackPage loggedIn={loggedIn} setLoggedIn={setLoggedIn} />;
-  else if (path === '/sources') page = <SourcesPage onSource={openSource} />;
-  else if (path === '/admin') page = <AdminPage />;
-  else if (path === '/audit') page = <AuditPage />;
-  else if (path === '/about') page = <AboutPage />;
-  else if (path === '/settings') page = <SettingsPage theme={theme} setTheme={setTheme} loggedIn={loggedIn} setLoggedIn={setLoggedIn} />;
-  else { page = <div className="grid min-h-[60vh] place-items-center text-center"><div><h1 className="font-display text-5xl">Record not found</h1><p className="mt-3 text-sm text-muted-foreground">This route is not part of the demo workspace.</p><Button onClick={() => setLocation('/')} className="mt-6" testId="button-not-found-home">Return home</Button></div></div>; }
-  const internal = path !== '/';
-  const content = internal ? <Shell theme={theme} setTheme={setTheme} loggedIn={loggedIn} setLoggedIn={setLoggedIn}>{page}</Shell> : page;
-  return <>{content}{paiOpen && <PaiModal onClose={() => setPaiOpen(false)} />}{source && <Modal title={source.name} onClose={() => setSource(null)} testId="dialog-source"><div className="flex items-center gap-2"><Badge tone={source.status === 'Verified' ? 'teal' : 'saffron'}>{source.status}</Badge><span className="font-mono-ui text-[10px] text-muted-foreground">{source.url}</span></div><div className="mt-6 space-y-4 text-sm"><div><div className="font-mono-ui text-[10px] uppercase text-muted-foreground">Record type</div><div className="mt-1">{source.type}</div></div><div><div className="font-mono-ui text-[10px] uppercase text-muted-foreground">Coverage in this demo</div><div className="mt-1">{source.coverage}</div></div><div><div className="font-mono-ui text-[10px] uppercase text-muted-foreground">Last accessed</div><div className="mt-1">{source.accessed}</div></div></div><div className="mt-6 rounded-lg bg-muted p-3 text-xs leading-5 text-muted-foreground"><Info size={14} className="mb-2 text-primary" />This prototype models the source trail locally. External links are represented as labels only and are not fetched by the app.</div><Button onClick={() => setSource(null)} className="mt-5 w-full" testId="button-close-source">Close source detail</Button></Modal>}{question && <Modal title={question.number} onClose={() => setQuestion(null)} testId="drawer-question"><div><Badge tone={question.status === 'Answered' ? 'teal' : 'saffron'}>{question.status}</Badge><h3 className="mt-4 font-display text-3xl leading-tight">{question.title}</h3><div className="mt-4 grid gap-3 rounded-lg bg-muted p-4 text-xs sm:grid-cols-2"><div><span className="text-muted-foreground">Asked by</span><strong className="mt-1 block">{question.rep}</strong></div><div><span className="text-muted-foreground">Constituency</span><strong className="mt-1 block">{question.constituency}</strong></div><div><span className="text-muted-foreground">Ministry</span><strong className="mt-1 block">{question.ministry}</strong></div><div><span className="text-muted-foreground">Date</span><strong className="mt-1 block">{question.date}</strong></div></div><p className="mt-5 text-sm leading-7 text-muted-foreground">{question.summary}</p><div className="mt-6 flex items-center gap-2 border-t border-border pt-4 text-xs text-muted-foreground"><FileCheck2 size={14} className="text-primary" />Parliamentary record · source verified for demo</div><Button onClick={() => setQuestion(null)} className="mt-6 w-full" testId="button-close-question">Close record</Button></div></Modal>}</>;
+
+  if (path === "/") {
+    page = (
+      <Landing
+        onSource={setSource}
+        theme={theme}
+        setTheme={setTheme}
+      />
+    );
+  } else if (path === "/dashboard") {
+    page = (
+      <Dashboard
+        onPai={() => setPaiOpen(true)}
+        onSource={setSource}
+        onQuestion={setQuestion}
+      />
+    );
+  } else if (path === "/representatives") {
+    page = <Directory />;
+  } else if (path === "/settings") {
+    page = (
+      <SettingsPage
+        theme={theme}
+        setTheme={setTheme}
+        loggedIn={loggedIn}
+        setLoggedIn={setLoggedIn}
+      />
+    );
+  } else {
+    page = (
+      <div className="grid min-h-[60vh] place-items-center text-center">
+        <div>
+          <h1 className="font-display text-5xl">
+            Record not found
+          </h1>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            This route is not part of the demo workspace.
+          </p>
+
+          <Button
+            onClick={() => setLocation("/")}
+            className="mt-6"
+            testId="button-not-found-home"
+          >
+            Return home
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const internal = path !== "/";
+
+  const content = internal ? (
+    <Shell
+      theme={theme}
+      setTheme={setTheme}
+      loggedIn={loggedIn}
+      setLoggedIn={setLoggedIn}
+    >
+      {page}
+    </Shell>
+  ) : (
+    page
+  );
+
+  return (
+    <>
+      {content}
+
+      {paiOpen && (
+        <PaiModal onClose={() => setPaiOpen(false)} />
+      )}
+
+      {source && (
+        <Modal
+          title={source.name}
+          onClose={() => setSource(null)}
+          testId="dialog-source"
+        >
+          <div className="flex items-center gap-2">
+            <Badge
+              tone={
+                source.status === "Verified"
+                  ? "teal"
+                  : "saffron"
+              }
+            >
+              {source.status}
+            </Badge>
+
+            <span className="font-mono-ui text-[10px] text-muted-foreground">
+              {source.url}
+            </span>
+          </div>
+
+          <div className="mt-6 space-y-4 text-sm">
+            <div>
+              <div className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                Record type
+              </div>
+
+              <div className="mt-1">{source.type}</div>
+            </div>
+
+            <div>
+              <div className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                Coverage in this demo
+              </div>
+
+              <div className="mt-1">{source.coverage}</div>
+            </div>
+
+            <div>
+              <div className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                Last accessed
+              </div>
+
+              <div className="mt-1">{source.accessed}</div>
+            </div>
+          </div>
+
+          <Button
+            onClick={() => setSource(null)}
+            className="mt-5 w-full"
+            testId="button-close-source"
+          >
+            Close source detail
+          </Button>
+        </Modal>
+      )}
+
+      {question && (
+        <Modal
+          title={question.number}
+          onClose={() => setQuestion(null)}
+          testId="drawer-question"
+        >
+          <Badge
+            tone={
+              question.status === "Answered"
+                ? "teal"
+                : "saffron"
+            }
+          >
+            {question.status}
+          </Badge>
+
+          <h3 className="mt-4 font-display text-3xl leading-tight">
+            {question.title}
+          </h3>
+
+          <div className="mt-4 grid gap-3 rounded-lg bg-muted p-4 text-xs sm:grid-cols-2">
+            <div>
+              <span className="text-muted-foreground">
+                Asked by
+              </span>
+
+              <strong className="mt-1 block">
+                {question.rep}
+              </strong>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">
+                Constituency
+              </span>
+
+              <strong className="mt-1 block">
+                {question.constituency}
+              </strong>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">
+                Ministry
+              </span>
+
+              <strong className="mt-1 block">
+                {question.ministry}
+              </strong>
+            </div>
+
+            <div>
+              <span className="text-muted-foreground">
+                Date
+              </span>
+
+              <strong className="mt-1 block">
+                {question.date}
+              </strong>
+            </div>
+          </div>
+
+          <p className="mt-5 text-sm leading-7 text-muted-foreground">
+            {question.summary}
+          </p>
+
+          <Button
+            onClick={() => setQuestion(null)}
+            className="mt-6 w-full"
+            testId="button-close-question"
+          >
+            Close record
+          </Button>
+        </Modal>
+      )}
+    </>
+  );
 }
+
+/* =========================================================
+   APP
+   ========================================================= */
 
 function App() {
-  const [theme, setTheme] = useState(false); const [loggedIn, setLoggedIn] = useState(false);
-  useEffect(() => { document.documentElement.classList.toggle('dark', theme); }, [theme]);
-  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><ErrorBoundary resetKey={useLocation()[0]}><AppRouter theme={theme} setTheme={setTheme} loggedIn={loggedIn} setLoggedIn={setLoggedIn} /></ErrorBoundary></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+  /*
+   * Theme:
+   * false = light
+   * true  = dark
+   *
+   * The user's choice is saved in localStorage.
+   */
+
+  const [theme, setTheme] = useState<boolean>(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return localStorage.getItem("janpratinidhi-theme") === "dark";
+  });
+
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+
+    root.classList.toggle("dark", theme);
+
+    localStorage.setItem(
+      "janpratinidhi-theme",
+      theme ? "dark" : "light"
+    );
+  }, [theme]);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter
+          base={import.meta.env.BASE_URL.replace(/\/$/, "")}
+        >
+          <ErrorBoundary>
+            <AppRouter
+              theme={theme}
+              setTheme={setTheme}
+              loggedIn={loggedIn}
+              setLoggedIn={setLoggedIn}
+            />
+          </ErrorBoundary>
+        </WouterRouter>
+
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
 }
 
 export default App;
