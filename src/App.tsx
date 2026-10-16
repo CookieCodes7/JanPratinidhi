@@ -408,6 +408,7 @@ function Shell({
 }) {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const current =
     navGroups
@@ -415,104 +416,283 @@ function Shell({
       .find((item) => item[1] === location)?.[0] ||
     "Dashboard";
 
+  /*
+   * Close More automatically whenever the route changes.
+   */
+  useEffect(() => {
+    setMoreOpen(false);
+    setMobileOpen(false);
+  }, [location]);
+
+  /*
+   * Escape key closes the More dropdown.
+   */
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+        setMobileOpen(false);
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  /*
+   * Main navigation.
+   *
+   * These are the important sections that stay visible.
+   * Everything else goes inside More.
+   */
+  const mainNav = [
+    ["Dashboard", "/dashboard", LayoutDashboard],
+    ["Representatives", "/representatives", Users],
+    ["Constituency", "/issues", MapPin],
+    ["Parliament", "/questions", Landmark],
+    ["Compare", "/compare", GitCompareArrows],
+  ] as const;
+
+  /*
+   * Secondary items inside More.
+   */
+  const moreNav = [
+    ["Find my representatives", "/find-representatives", MapPin],
+    ["Development tracker", "/tracker", ClipboardList],
+    ["Analytics", "/analytics", BarChart3],
+    ["Citizen feedback", "/feedback", MessageSquareText],
+    ["Data sources", "/sources", Database],
+    ["Audit log", "/audit", FileCheck2],
+    ["About JanPratinidhi", "/about", Info],
+    ["Settings", "/settings", Settings],
+  ] as const;
+
   return (
-    <div className="app-noise flex min-h-[100dvh] bg-background">
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[252px] flex-col bg-sidebar text-sidebar-foreground transition-transform lg:static lg:translate-x-0 ${
-          mobileOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <div className="flex h-[72px] items-center border-b border-sidebar-border px-5">
-          <Logo />
-        </div>
+    <div className="app-noise min-h-[100dvh] bg-background text-foreground">
+      {/* =========================================================
+          TOP NAVIGATION
+      ========================================================== */}
+      <header className="sticky top-0 z-50 border-b border-border/80 bg-background/90 backdrop-blur-xl">
+        <div className="mx-auto flex h-[72px] max-w-[1500px] items-center gap-4 px-4 sm:px-6 lg:px-8">
 
-        <div className="flex-1 overflow-y-auto px-3 py-5">
-          {navGroups.map((group) => (
-            <div key={group.label} className="mb-7">
-              <div className="mb-2 px-3 font-mono-ui text-[9px] font-bold uppercase tracking-[.18em] text-sidebar-foreground/45">
-                {group.label}
-              </div>
+          {/* Logo */}
+          <div className="shrink-0">
+            <Logo />
+          </div>
 
-              <nav className="space-y-1">
-                {group.items.map(([label, href, Icon]) => {
-                  const active = location === href;
+          {/* Desktop navigation */}
+          <nav className="hidden flex-1 items-center justify-center gap-1 lg:flex">
+            {mainNav.map(([label, href, Icon]) => {
+              const active =
+                location === href ||
+                (href === "/representatives" &&
+                  location.startsWith("/representatives/"));
 
-                  return (
-                    <Link
-                      key={href}
-                      href={href}
-                      onClick={() => setMobileOpen(false)}
-                      data-testid={`nav-${label
-                        .toLowerCase()
-                        .replaceAll(" ", "-")}`}
-                      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors ${
-                        active
-                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
-                      }`}
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  data-testid={`top-nav-${label
+                    .toLowerCase()
+                    .replaceAll(" ", "-")}`}
+                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <Icon
+                    size={16}
+                    strokeWidth={active ? 2.4 : 1.8}
+                  />
+                  <span>{label}</span>
+                </Link>
+              );
+            })}
+
+            {/* =====================================================
+                MORE DROPDOWN
+            ====================================================== */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                aria-expanded={moreOpen}
+                aria-haspopup="menu"
+                aria-label="More navigation options"
+                data-testid="button-more-navigation"
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
+                  moreOpen
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <MoreHorizontal size={17} />
+                <span>More</span>
+              </button>
+
+              {moreOpen && (
+                <>
+                  {/* Outside-click layer */}
+                  <button
+                    type="button"
+                    aria-label="Close More menu"
+                    onClick={() => setMoreOpen(false)}
+                    className="fixed inset-0 z-40 cursor-default bg-transparent"
+                  />
+
+                  {/* Dropdown */}
+                  <div
+                    role="menu"
+                    aria-label="More navigation"
+                    className="absolute right-0 top-full z-50 mt-3 w-[270px] overflow-hidden rounded-2xl border border-border bg-card p-2 shadow-2xl"
+                  >
+                    <div className="px-3 pb-2 pt-2">
+                      <div className="font-mono-ui text-[9px] uppercase tracking-[.18em] text-muted-foreground">
+                        More sections
+                      </div>
+                    </div>
+
+                    <div className="space-y-0.5">
+                      {moreNav.map(([label, href, Icon]) => {
+                        const active =
+                          location === href ||
+                          (href === "/representatives" &&
+                            location.startsWith("/representatives/"));
+
+                        return (
+                          <Link
+                            key={href}
+                            href={href}
+                            onClick={() => setMoreOpen(false)}
+                            data-testid={`more-nav-${label
+                              .toLowerCase()
+                              .replaceAll(" ", "-")}`}
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all ${
+                              active
+                                ? "bg-primary/10 text-primary"
+                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                            }`}
+                          >
+                            <span
+                              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
+                                active
+                                  ? "bg-primary/10"
+                                  : "bg-muted"
+                              }`}
+                            >
+                              <Icon size={16} />
+                            </span>
+
+                            <span className="flex-1">
+                              {label}
+                            </span>
+
+                            {href === "/settings" && (
+                              <span className="font-mono-ui text-[8px] uppercase tracking-wider text-muted-foreground">
+                                Preferences
+                              </span>
+                            )}
+                          </Link>
+                        );
+                      })}
+                    </div>
+
+                    <div className="my-2 border-t border-border" />
+
+                    {/* Session */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setLoggedIn(!loggedIn);
+                        setMoreOpen(false);
+                      }}
+                      data-testid="button-session"
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-[13px] text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
                     >
-                      <Icon size={17} />
+                      {loggedIn ? (
+                        <>
+                          <span className="grid h-8 w-8 place-items-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                            CN
+                          </span>
 
-                      <span>{label}</span>
-                    </Link>
-                  );
-                })}
-              </nav>
+                          <span className="flex-1">
+                            <span className="block font-medium text-foreground">
+                              Citizen view
+                            </span>
+                            <span className="block text-[10px] text-muted-foreground">
+                              Signed in locally
+                            </span>
+                          </span>
+
+                          <LogOut size={15} />
+                        </>
+                      ) : (
+                        <>
+                          <span className="grid h-8 w-8 place-items-center rounded-full border border-border">
+                            <LogIn size={15} />
+                          </span>
+
+                          <span className="flex-1">
+                            <span className="block font-medium text-foreground">
+                              Sign in to contribute
+                            </span>
+                            <span className="block text-[10px] text-muted-foreground">
+                              Local demo session
+                            </span>
+                          </span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Data posture */}
+                    <div className="mt-2 rounded-xl bg-muted/70 p-3">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck
+                          size={14}
+                          className="text-accent"
+                        />
+
+                        <span className="font-mono-ui text-[9px] uppercase tracking-[.14em] text-muted-foreground">
+                          Data posture
+                        </span>
+                      </div>
+
+                      <p className="mt-1.5 text-[10px] leading-4 text-muted-foreground">
+                        Public records only. Attribution is never
+                        inferred.
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          ))}
-        </div>
+          </nav>
 
-        <div className="border-t border-sidebar-border p-4">
-          <div className="rounded-lg bg-sidebar-accent/50 p-3">
-            <div className="flex items-center gap-2">
-              <ShieldCheck size={15} className="text-primary" />
+          {/* =====================================================
+              RIGHT SIDE CONTROLS
+          ====================================================== */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
 
-              <span className="font-mono-ui text-[9px] font-bold uppercase tracking-[.12em]">
-                Data mode
-              </span>
+            {/* Search */}
+            <div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 md:flex">
+              <Search
+                size={15}
+                className="text-muted-foreground"
+              />
+
+              <input
+                aria-label="Search the public record"
+                data-testid="input-global-search"
+                className="w-32 bg-transparent text-xs outline-none placeholder:text-muted-foreground lg:w-40"
+                placeholder="Search records..."
+              />
             </div>
 
-            <p className="mt-2 text-[11px] leading-5 text-sidebar-foreground/55">
-              Demo records are clearly labelled. Source records remain the
-              authority.
-            </p>
-          </div>
-        </div>
-      </aside>
-
-      {mobileOpen && (
-        <button
-          type="button"
-          aria-label="Close navigation"
-          onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
-        />
-      )}
-
-      <main className="min-w-0 flex-1">
-        <header className="sticky top-0 z-20 flex h-[72px] items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur md:px-7">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className="grid h-10 w-10 place-items-center rounded-lg border border-border lg:hidden"
-              aria-label="Open navigation"
-            >
-              <Menu size={18} />
-            </button>
-
-            <div>
-              <div className="font-mono-ui text-[9px] uppercase tracking-[.16em] text-muted-foreground">
-                JanPratinidhi
-              </div>
-
-              <div className="mt-0.5 font-display text-xl">
-                {current}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
+            {/* Theme */}
             <button
               type="button"
               onClick={() => setTheme(!theme)}
@@ -527,7 +707,7 @@ function Shell({
                   ? "Switch to light mode"
                   : "Switch to dark mode"
               }
-              className="relative grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
+              className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
             >
               {theme ? (
                 <Sun size={17} />
@@ -536,42 +716,270 @@ function Shell({
               )}
             </button>
 
-            <Link
-              href="/settings"
-              className="grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-all hover:border-primary hover:text-primary"
-              aria-label="Settings"
-            >
-              <Settings size={17} />
-            </Link>
-
+            {/* Notifications */}
             <button
               type="button"
-              onClick={() => setLoggedIn(!loggedIn)}
-              className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs font-semibold sm:flex"
+              data-testid="button-notifications"
+              aria-label="Notifications"
+              className="relative grid h-10 w-10 place-items-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:border-primary hover:text-primary"
             >
-              {loggedIn ? (
-                <>
-                  <LogOut size={15} />
-                  Sign out
-                </>
-              ) : (
-                <>
-                  <LogIn size={15} />
-                  Sign in
-                </>
-              )}
-            </button>
-          </div>
-        </header>
+              <Bell size={17} />
 
-        <div className="mx-auto w-full max-w-[1440px] px-4 py-7 md:px-7 lg:px-9">
+              <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-accent" />
+            </button>
+
+            {/* Demo label */}
+            <span className="hidden h-8 w-px bg-border sm:block" />
+
+            <span className="hidden font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground sm:block">
+              DEMO
+            </span>
+
+            {/* Mobile menu */}
+            <Button
+              variant="outline"
+              onClick={() => setMobileOpen(true)}
+              className="px-2.5 lg:hidden"
+              testId="button-open-mobile-nav"
+            >
+              <Menu size={18} />
+            </Button>
+          </div>
+        </div>
+
+        {/* =======================================================
+            MOBILE NAVIGATION
+        ======================================================== */}
+        {mobileOpen && (
+          <>
+            {/* Overlay */}
+            <button
+              type="button"
+              aria-label="Close navigation"
+              onClick={() => setMobileOpen(false)}
+              className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm lg:hidden"
+            />
+
+            {/* Mobile drawer */}
+            <div className="fixed inset-y-0 right-0 z-50 flex w-[310px] max-w-[88vw] flex-col border-l border-border bg-background shadow-2xl lg:hidden">
+
+              {/* Drawer header */}
+              <div className="flex h-[72px] items-center justify-between border-b border-border px-5">
+                <Logo />
+
+                <button
+                  type="button"
+                  onClick={() => setMobileOpen(false)}
+                  aria-label="Close navigation"
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Navigation */}
+              <div className="flex-1 overflow-y-auto px-4 py-5">
+
+                <div className="mb-3 px-2 font-mono-ui text-[9px] uppercase tracking-[.2em] text-muted-foreground">
+                  Navigate
+                </div>
+
+                <div className="space-y-1">
+                  {mainNav.map(([label, href, Icon]) => {
+                    const active =
+                      location === href ||
+                      (href === "/representatives" &&
+                        location.startsWith("/representatives/"));
+
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMobileOpen(false)}
+                        data-testid={`mobile-main-${label
+                          .toLowerCase()
+                          .replaceAll(" ", "-")}`}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${
+                          active
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <span
+                          className={`grid h-9 w-9 place-items-center rounded-lg ${
+                            active
+                              ? "bg-primary/10"
+                              : "bg-muted"
+                          }`}
+                        >
+                          <Icon size={17} />
+                        </span>
+
+                        <span>{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div className="my-5 border-t border-border" />
+
+                <div className="mb-3 px-2 font-mono-ui text-[9px] uppercase tracking-[.2em] text-muted-foreground">
+                  More
+                </div>
+
+                <div className="space-y-1">
+                  {moreNav.map(([label, href, Icon]) => {
+                    const active =
+                      location === href ||
+                      (href === "/representatives" &&
+                        location.startsWith("/representatives/"));
+
+                    return (
+                      <Link
+                        key={href}
+                        href={href}
+                        onClick={() => setMobileOpen(false)}
+                        data-testid={`mobile-more-${label
+                          .toLowerCase()
+                          .replaceAll(" ", "-")}`}
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${
+                          active
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <Icon size={17} />
+
+                        <span>{label}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Mobile session */}
+              <div className="border-t border-border p-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoggedIn(!loggedIn);
+                    setMobileOpen(false);
+                  }}
+                  data-testid="button-mobile-session"
+                  className="flex w-full items-center gap-3 rounded-xl bg-muted/60 p-3 text-left"
+                >
+                  {loggedIn ? (
+                    <>
+                      <span className="grid h-9 w-9 place-items-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground">
+                        CN
+                      </span>
+
+                      <span className="flex-1">
+                        <span className="block text-sm font-semibold">
+                          Citizen view
+                        </span>
+
+                        <span className="block text-[10px] text-muted-foreground">
+                          Signed in locally
+                        </span>
+                      </span>
+
+                      <LogOut size={15} />
+                    </>
+                  ) : (
+                    <>
+                      <span className="grid h-9 w-9 place-items-center rounded-full border border-border">
+                        <LogIn size={15} />
+                      </span>
+
+                      <span className="flex-1">
+                        <span className="block text-sm font-semibold">
+                          Sign in to contribute
+                        </span>
+
+                        <span className="block text-[10px] text-muted-foreground">
+                          Local demo session
+                        </span>
+                      </span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </header>
+
+      {/* =========================================================
+          PAGE TITLE STRIP
+      ========================================================== */}
+      <div className="border-b border-border/60 bg-muted/20">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
+          <div>
+            <div className="font-mono-ui text-[9px] uppercase tracking-[.18em] text-muted-foreground">
+              JanPratinidhi <span className="text-accent">/</span>
+            </div>
+
+            <div className="mt-0.5 text-sm font-semibold">
+              {current}
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-2 sm:flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+
+            <span className="font-mono-ui text-[9px] uppercase tracking-[.15em] text-muted-foreground">
+              Public record / demo
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* =========================================================
+          MAIN CONTENT
+      ========================================================== */}
+      <main className="min-w-0">
+        <div className="mx-auto max-w-[1440px] px-4 pb-28 pt-8 sm:px-6 lg:px-10 lg:pb-10">
           {children}
         </div>
       </main>
+
+      {/* =========================================================
+          MOBILE BOTTOM NAV
+      ========================================================== */}
+      <div className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border border-border bg-card/95 p-1.5 shadow-xl backdrop-blur lg:hidden">
+
+        {[
+          ["/dashboard", Home],
+          ["/representatives", Users],
+          ["/questions", CircleHelp],
+          ["/issues", MapPin],
+          ["/settings", Settings],
+        ].map(([href, Icon]) => {
+          const active =
+            location === (href as string) ||
+            ((href as string) === "/representatives" &&
+              location.startsWith("/representatives/"));
+
+          return (
+            <Link
+              key={href as string}
+              href={href as string}
+              data-testid={`mobile-nav-${href}`}
+              className={`grid place-items-center rounded-xl py-2.5 transition-colors ${
+                active
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              <Icon size={18} />
+            </Link>
+          );
+        })}
+      </div>
     </div>
   );
 }
-
 /* =========================================================
    LANDING PAGE
    ========================================================= */

@@ -145,3 +145,234 @@
 .reveal-delay-3 { animation-delay: .24s; }
 @keyframes reveal { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* =========================================================
+   JANPRATINIDHI — REFINED BLACK DARK MODE
+   ========================================================= */
+
+html.dark {
+  color-scheme: dark;
+
+  /* Core */
+  --background: #000000;
+  --foreground: #e7e7e7;
+
+  /* Surfaces */
+  --card: #080808;
+  --card-foreground: #e7e7e7;
+
+  --popover: #080808;
+  --popover-foreground: #e7e7e7;
+
+  --muted: #101010;
+  --muted-foreground: #8a8a8a;
+
+  /* Borders */
+  --border: #242424;
+  --input: #242424;
+
+  /* Secondary */
+  --secondary: #101010;
+  --secondary-foreground: #e7e7e7;
+
+  /* Keep your existing accent/primary colours */
+  --primary-foreground: #ffffff;
+  --accent-foreground: #ffffff;
+}
+
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+html.dark body {
+  background: #000000;
+  color: #e7e7e7;
+}
+
+/* =========================================================
+   SURFACES
+   ========================================================= */
+
+html.dark .bg-background {
+  background-color: #000000 !important;
+}
+
+html.dark .bg-card {
+  background-color: #080808 !important;
+}
+
+html.dark .bg-muted {
+  background-color: #101010 !important;
+}
+
+/* Slightly transparent muted surfaces */
+html.dark .bg-muted\/20 {
+  background-color: rgba(255, 255, 255, 0.018) !important;
+}
+
+html.dark .bg-muted\/60 {
+  background-color: rgba(255, 255, 255, 0.035) !important;
+}
+
+html.dark .bg-muted\/70 {
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+/* =========================================================
+   BORDERS
+   ========================================================= */
+
+/*
+   IMPORTANT:
+   Do NOT use white borders in dark mode.
+   Everything gets a very subtle charcoal border.
+*/
+
+html.dark .border-border {
+  border-color: #242424 !important;
+}
+
+html.dark .border-border\/80 {
+  border-color: rgba(255, 255, 255, 0.11) !important;
+}
+
+html.dark .border-border\/60 {
+  border-color: rgba(255, 255, 255, 0.075) !important;
+}
+
+/* =========================================================
+   TEXT
+   ========================================================= */
+
+html.dark .text-foreground {
+  color: #e7e7e7 !important;
+}
+
+html.dark .text-muted-foreground {
+  color: #858585 !important;
+}
+
+/* Don't make every heading pure white */
+html.dark h1,
+html.dark h2,
+html.dark h3,
+html.dark h4 {
+  color: #eeeeee;
+}
+
+/* =========================================================
+   INPUTS
+   ========================================================= */
+
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background-color: #080808;
+  color: #e7e7e7;
+  border-color: #242424;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #666666;
+}
+
+/* =========================================================
+   HEADER / NAV
+   ========================================================= */
+
+html.dark header {
+  background-color: rgba(0, 0, 0, 0.92) !important;
+}
+
+/* Header bottom line */
+html.dark header.border-b {
+  border-bottom-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* =========================================================
+   CARDS
+   ========================================================= */
+
+/*
+   Cards should be visible against black,
+   but their borders should NOT scream.
+*/
+
+html.dark .rounded-xl.border,
+html.dark .rounded-2xl.border {
+  border-color: #242424;
+}
+
+/* =========================================================
+   CHARTS
+   ========================================================= */
+
+/*
+   This is the big one from your screenshot.
+   Recharts is drawing bright grid lines.
+*/
+
+html.dark .recharts-cartesian-grid line {
+  stroke: #242424 !important;
+  stroke-opacity: 0.65 !important;
+}
+
+/* Axis lines */
+html.dark .recharts-xAxis line,
+html.dark .recharts-yAxis line {
+  stroke: #242424 !important;
+}
+
+/* Axis text */
+html.dark .recharts-cartesian-axis-tick-value {
+  fill: #686868 !important;
+}
+
+/* Chart labels */
+html.dark .recharts-text {
+  fill: #858585;
+}
+
+/* Tooltip */
+html.dark .recharts-tooltip-wrapper {
+  outline: none;
+}
+
+html.dark .recharts-default-tooltip {
+  background: #0b0b0b !important;
+  border: 1px solid #292929 !important;
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.65) !important;
+}
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+html.dark ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: #000000;
+}
+
+html.dark ::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 999px;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #333333;
+}
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+html.dark input:focus,
+html.dark textarea:focus,
+html.dark select:focus {
+  outline: none;
+}
