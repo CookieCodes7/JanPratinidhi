@@ -107,61 +107,31 @@ type ApiDashboard = {
 };
 
 const apiGet = async <T,>(path: string): Promise<T> => {
-  try {
-    const response = await fetch(`/api/${path}`);
+  const response = await fetch(`/api/${path}`, {
+    headers: {
+      Accept: "application/json",
+    },
+  });
 
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
+  if (!response.ok) {
+    let message = `API request failed: ${response.status}`;
+
+    try {
+      const body = await response.json();
+
+      if (typeof body?.message === "string") {
+        message = body.message;
+      }
+    } catch {
+      // Keep the HTTP status message.
     }
 
-    return response.json() as Promise<T>;
-  } catch {
-    if (path.startsWith("dashboard")) {
-      return {
-        mode: "demo",
-        available: true,
-        last_synced_at: null,
-        message:
-          "Demo records are shown for product exploration. They are not verified public facts.",
-        metrics: {
-          pai: 78,
-          attendance: 86,
-          questions: 491,
-          active_issues: issues.filter(
-            (i) => i.status !== "Reported"
-          ).length,
-          debates: 178,
-          bills: 51,
-        },
-        sessions: attendanceTrend.map((s) => ({
-          session: s.session,
-          attendance: s.attendance,
-          questions: s.questions,
-          participation: s.participation,
-        })),
-      } as T;
-    }
-
-    if (path.startsWith("location/resolve")) {
-      return {
-        status: "unavailable",
-        confidence: "not available",
-        message:
-          "PIN-to-constituency lookup is not connected in the standalone demo yet.",
-        location: {
-          state: null,
-          district: null,
-          city: null,
-          pincode: path.split("pincode=")[1] ?? null,
-        },
-        parliamentary_constituencies: [],
-        assembly_constituencies: [],
-      } as T;
-    }
-
-    throw new Error("Local API unavailable");
+    throw new Error(message);
   }
+
+  return response.json() as Promise<T>;
 };
+
 
 type NavItem = [string, string, IconType];
 
