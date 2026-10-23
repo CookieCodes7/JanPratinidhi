@@ -1,877 +1,1840 @@
+#!/usr/bin/env python3
+
+"""
+JanPratinidhi MPLADS/eSAKSHI -> PostgreSQL importer.
+
+Expected files in the same folder:
+
+    mplads_mp_summary.json
+    mplads_works_recommended.json
+    mplads_works_sanctioned.json
+    mplads_works_completed.json
+
+Run:
+
+    $env:DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/janpratinidhi"
+    python mplads_import.py
+
+The importer is designed to be safely re-run.
+"""
+
+from __future__ import annotations
+
+import ast
+import hashlib
 import json
 import os
 import re
+import sys
+
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Any
 
-import psycopg2
-from psycopg2.extras import execute_values
+try:
+    import psycopg2
+    from psycopg2.extras import Json, execute_values
+except ImportError:
+    print("psycopg2 is not installed.")
+    print("Run:")
+    print("    pip install psycopg2-binary")
+    sys.exit(1)
 
+
+# ============================================================
+# CONFIG
+# ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent
 
+SUMMARY_FILE = BASE_DIR / "mplads_mp_summary.json"
+RECOMMENDED_FILE = BASE_DIR / "mplads_works_recommended.json"
+SANCTIONED_FILE = BASE_DIR / "mplads_works_sanctioned.json"
+COMPLETED_FILE = BASE_DIR / "mplads_works_completed.json"
 
-def load_json(filename):
-    path = BASE_DIR / filename
-
-    if not path.exists():
-        raise FileNotFoundError(
-            f"Missing file: {filename}"
-        )
-
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+SOURCE_NAME = "MPLADS / eSAKSHI"
+SOURCE_URL = "https://www.mplads.gov.in/"
 
 
-def parse_money(value):
-    """
-    Convert values such as:
+# ============================================================
+# BASIC HELPERS
+# ============================================================
 
-        500000
-        " 10,72,44,034.00"
-        " 10.72 Crore"
-
-    into Decimal where possible.
-    """
-
+def clean(value: Any) -> str | None:
     if value is None:
         return None
-
-    if isinstance(value, (int, float)):
-        return Decimal(str(value))
 
     text = str(value).strip()
 
     if not text:
         return None
 
-    # Remove rupee symbol, commas and whitespace.
-    text = (
-        text
-        .replace("₹", "")
-        .replace(",", "")
-        .replace(" ", "")
-    )
+    if text.lower() in {
+        "null",
+        "none",
+        "n/a",
+        "na",
+        "-",
+        "--",
+    }:
+        return None
 
-    # Handle crore display values.
-    crore_match = re.match(
-        r"^([0-9.]+)\s*Crore$",
+    return text
+
+
+def get_value(
+    record: dict[str, Any],
+    *keys: str,
+) -> Any:
+
+    if not isinstance(record, dict):
+        return None
+
+    lowered = {
+        str(key).lower(): value
+        for key, value in record.items()
+    }
+
+    for key in keys:
+
+        if key in record:
+            value = record[key]
+
+            if value is not None and str(value).strip():
+                return value
+
+        value = lowered.get(key.lower())
+
+        if value is not None and str(value).strip():
+            return value
+
+    return None
+
+
+def load_json(path: Path) -> Any:
+
+    if not path.exists():
+        print(f"WARNING: {path.name} not found.")
+        return None
+
+    with path.open(
+        "r",
+        encoding="utf-8-sig",
+    ) as file:
+        return json.load(file)
+
+
+def decode_json_string(value: Any) -> Any:
+
+    if not isinstance(value, str):
+        return value
+
+    text = value.strip()
+
+    if not text:
+        return value
+
+    try:
+        return json.loads(text)
+
+    except Exception:
+        pass
+
+    if text.startswith("[") or text.startswith("{"):
+
+        try:
+            return ast.literal_eval(text)
+
+        except Exception:
+            pass
+
+    return value
+
+
+# ============================================================
+# RECORD EXTRACTION
+# ============================================================
+
+def extract_records(obj: Any) -> list[dict[str, Any]]:
+
+    obj = decode_json_string(obj)
+
+    # Direct list
+    if isinstance(obj, list):
+
+        result = []
+
+        for item in obj:
+
+            item = decode_json_string(item)
+
+            if isinstance(item, dict):
+                result.append(item)
+
+            elif isinstance(item, list):
+                result.extend(
+                    extract_records(item)
+                )
+
+        return result
+
+    # Dictionary
+    if isinstance(obj, dict):
+
+        keys = {
+            str(key).upper()
+            for key in obj.keys()
+        }
+
+        # This looks like an actual work record.
+        markers = {
+            "MP_NAME",
+            "WORK_ID",
+            "WORK_DESCRIPTION",
+            "ACTIVITY_NAME",
+            "WORK_RECOMMENDATION_DTL_ID",
+        }
+
+        if keys.intersection(markers):
+            return [obj]
+
+        result = []
+
+        for value in obj.values():
+
+            value = decode_json_string(value)
+
+            if isinstance(value, (dict, list)):
+                result.extend(
+                    extract_records(value)
+                )
+
+        return result
+
+    return []
+
+
+# ============================================================
+# NUMBER / DATE PARSING
+# ============================================================
+
+def parse_money(value: Any) -> Decimal | None:
+
+    if value is None:
+        return None
+
+    text = str(value).strip()
+
+    if not text:
+        return None
+
+    # Example:
+    # "5.20 Crore"
+    crore_match = re.search(
+        r"([0-9][0-9,\s]*(?:\.[0-9]+)?)\s*crore",
         text,
         re.IGNORECASE,
     )
 
     if crore_match:
-        return (
-            Decimal(crore_match.group(1))
-            * Decimal("10000000")
+
+        number = (
+            crore_match
+            .group(1)
+            .replace(",", "")
+            .replace(" ", "")
         )
+
+        try:
+            return (
+                Decimal(number)
+                * Decimal("10000000")
+            )
+
+        except InvalidOperation:
+            return None
+
+    text = (
+        text
+        .replace("₹", "")
+        .replace("Rs.", "")
+        .replace("Rs", "")
+        .replace(",", "")
+    )
+
+    text = re.sub(
+        r"[^0-9.\-]",
+        "",
+        text,
+    )
+
+    if not text:
+        return None
 
     try:
         return Decimal(text)
-    except Exception:
+
+    except InvalidOperation:
         return None
 
 
-def parse_date(value):
-    if not value:
+def parse_int(value: Any) -> int | None:
+
+    if value is None:
         return None
 
-    value = str(value).strip()
+    try:
+        return int(
+            float(
+                str(value)
+                .replace(",", "")
+                .strip()
+            )
+        )
+
+    except (
+        ValueError,
+        TypeError,
+    ):
+        return None
+
+
+def parse_date(value: Any):
+
+    if value is None:
+        return None
+
+    text = (
+        str(value)
+        .strip()
+        .strip("\"'")
+    )
 
     formats = [
+
         "%d-%b-%Y",
+
         "%d-%B-%Y",
+
+        "%d/%m/%Y",
+
+        "%d-%m-%Y",
+
+        "%Y-%m-%d",
+
+        "%Y/%m/%d",
+
         "%b %d, %Y %I:%M:%S %p",
+
         "%B %d, %Y %I:%M:%S %p",
+
+        "%b %d, %Y %H:%M:%S",
+
+        "%B %d, %Y %H:%M:%S",
+
     ]
 
     for fmt in formats:
+
         try:
             return datetime.strptime(
-                value,
+                text,
                 fmt,
             ).date()
+
         except ValueError:
             pass
 
-    return None
-
-
-def parse_embedded_json(value):
-    """
-    Some eSAKSHI responses return:
-
-        "Total Works Recommended": "[{...}]"
-
-    instead of a native JSON array.
-    """
-
-    if isinstance(value, list):
-        return value
-
-    if isinstance(value, dict):
-        return [value]
-
-    if not isinstance(value, str):
-        return []
-
-    value = value.strip()
-
-    if not value:
-        return []
-
     try:
-        return json.loads(value)
-    except json.JSONDecodeError:
-        return []
+
+        return datetime.fromisoformat(
+            text.replace(
+                "Z",
+                "+00:00",
+            )
+        ).date()
+
+    except ValueError:
+        return None
 
 
-def normalize_work(record, status):
-    """
-    Convert an eSAKSHI work into our internal representation.
-    """
+# ============================================================
+# SOURCE RECORD ID
+# ============================================================
 
-    work_id = (
-        record.get("WORK_ID")
-        or record.get("WORK_RECOMMENDATION_DTL_ID")
+def make_source_record_id(
+    record: dict[str, Any],
+    status: str,
+) -> str:
+
+    # eSAKSHI normally provides one of these.
+    candidates = [
+
+        "WORK_ID",
+
+        "WORK_RECOMMENDATION_DTL_ID",
+
+        "WORK_RECOMMENDATION_DETAIL_ID",
+
+    ]
+
+    for key in candidates:
+
+        value = clean(
+            get_value(
+                record,
+                key,
+            )
+        )
+
+        if value:
+            return value
+
+    # --------------------------------------------------------
+    # IMPORTANT:
+    #
+    # Some live eSAKSHI records don't contain WORK_ID.
+    #
+    # PostgreSQL requires source_record_id to be NOT NULL.
+    #
+    # Instead of inserting NULL, generate a deterministic
+    # identifier from the actual source record.
+    # --------------------------------------------------------
+
+    identity_fields = [
+
+        get_value(
+            record,
+            "MP_NAME",
+        ),
+
+        get_value(
+            record,
+            "STATE_NAME",
+        ),
+
+        get_value(
+            record,
+            "CONSTITUENCY",
+        ),
+
+        get_value(
+            record,
+            "CONSTITUENCY_ID",
+        ),
+
+        get_value(
+            record,
+            "ACTIVITY_NAME",
+        ),
+
+        get_value(
+            record,
+            "WORK_DESCRIPTION",
+        ),
+
+        get_value(
+            record,
+            "LETTER_NO",
+        ),
+
+        get_value(
+            record,
+            "RECOMMENDATION_DATE",
+        ),
+
+        get_value(
+            record,
+            "SANCTION_DATE",
+        ),
+
+        get_value(
+            record,
+            "ACTUAL_END_DATE",
+        ),
+
+        status,
+
+    ]
+
+    identity = "|".join(
+        ""
+        if value is None
+        else str(value).strip()
+        for value in identity_fields
     )
 
+    digest = hashlib.sha256(
+        identity.encode("utf-8")
+    ).hexdigest()[:24]
+
+    return f"generated-{digest}"
+
+
+# ============================================================
+# WORK NORMALIZATION
+# ============================================================
+
+def normalize_work(
+    record: dict[str, Any],
+    status: str,
+) -> dict[str, Any]:
+
+    house_number = parse_int(
+        get_value(
+            record,
+            "HOUSE_OF_PARLIAMENT",
+        )
+    )
+
+    if house_number == 1:
+        house = "rajya_sabha"
+    else:
+        house = "lok_sabha"
+
     return {
-        "source_record_id": str(work_id)
-        if work_id is not None
-        else None,
 
-        "work_id": work_id,
+        "source_record_id":
+            make_source_record_id(
+                record,
+                status,
+            ),
 
-        "mp_name": record.get("MP_NAME"),
+        "work_id":
+            clean(
+                get_value(
+                    record,
+                    "WORK_ID",
+                )
+            ),
 
-        "house": (
-            "lok_sabha"
-            if record.get("HOUSE_OF_PARLIAMENT") == 2
-            else None
-        ),
+        "mp_name":
+            clean(
+                get_value(
+                    record,
+                    "MP_NAME",
+                )
+            ),
 
-        "tenure": record.get("TENURE"),
+        "house":
+            house,
 
-        "state": record.get("STATE_NAME"),
+        "tenure":
+            clean(
+                get_value(
+                    record,
+                    "TENURE",
+                )
+            )
+            or "18th Lok Sabha",
 
-        "constituency": record.get("CONSTITUENCY"),
+        "state":
+            clean(
+                get_value(
+                    record,
+                    "STATE_NAME",
+                    "STATE",
+                )
+            ),
 
-        "constituency_id": record.get(
-            "CONSTITUENCY_ID"
-        ),
+        "constituency":
+            clean(
+                get_value(
+                    record,
+                    "CONSTITUENCY",
+                    "CONSTITUENCY_NAME",
+                )
+            ),
 
-        "district_authority": record.get(
-            "IDA_NAME"
-        ),
+        "constituency_id":
+            parse_int(
+                get_value(
+                    record,
+                    "CONSTITUENCY_ID",
+                )
+            ),
 
-        "work_category": record.get(
-            "WORK_CATEGORY"
-        ),
+        "district_authority":
+            clean(
+                get_value(
+                    record,
+                    "IDA_NAME",
+                    "DISTRICT_AUTHORITY",
+                )
+            ),
 
-        "activity_name": record.get(
-            "ACTIVITY_NAME"
-        ),
+        "work_category":
+            clean(
+                get_value(
+                    record,
+                    "WORK_CATEGORY",
+                )
+            ),
 
-        "work_description": record.get(
-            "WORK_DESCRIPTION"
-        ),
+        "activity_name":
+            clean(
+                get_value(
+                    record,
+                    "ACTIVITY_NAME",
+                )
+            ),
 
-        "work_stage": record.get(
-            "WORK_STAGE"
-        ),
+        "work_description":
+            clean(
+                get_value(
+                    record,
+                    "WORK_DESCRIPTION",
+                )
+            ),
 
-        "work_status": status,
+        "work_stage":
+            clean(
+                get_value(
+                    record,
+                    "WORK_STAGE",
+                )
+            ),
 
-        "recommendation_date": parse_date(
-            record.get("RECOMMENDATION_DATE")
-        ),
+        "work_status":
+            status,
 
-        "sanction_date": parse_date(
-            record.get("SANCTION_DATE")
-        ),
+        "recommendation_date":
+            parse_date(
+                get_value(
+                    record,
+                    "RECOMMENDATION_DATE",
+                )
+            ),
 
-        "actual_end_date": parse_date(
-            record.get("ACTUAL_END_DATE")
-        ),
+        "sanction_date":
+            parse_date(
+                get_value(
+                    record,
+                    "SANCTION_DATE",
+                )
+            ),
 
-        "recommended_amount": parse_money(
-            record.get("RECOMMENDED_AMOUNT")
-        ),
+        "actual_end_date":
+            parse_date(
+                get_value(
+                    record,
+                    "ACTUAL_END_DATE",
+                )
+            ),
 
-        "sanction_amount": parse_money(
-            record.get("SANCTION_AMOUNT")
-        ),
+        "recommended_amount":
+            parse_money(
+                get_value(
+                    record,
+                    "RECOMMENDED_AMOUNT",
+                )
+            ),
 
-        "actual_amount": parse_money(
-            record.get("ACTUAL_AMOUNT")
-        ),
+        "sanction_amount":
+            parse_money(
+                get_value(
+                    record,
+                    "SANCTION_AMOUNT",
+                )
+            ),
 
-        "letter_no": record.get(
-            "LETTER_NO"
-        ),
+        "actual_amount":
+            parse_money(
+                get_value(
+                    record,
+                    "ACTUAL_AMOUNT",
+                )
+            ),
 
-        "work_recommendation_detail_id": record.get(
-            "WORK_RECOMMENDATION_DTL_ID"
-        ),
+        "letter_no":
+            clean(
+                get_value(
+                    record,
+                    "LETTER_NO",
+                )
+            ),
 
-        "attach_id": record.get(
-            "ATTACH_ID"
-        ),
+        "work_recommendation_detail_id":
+            parse_int(
+                get_value(
+                    record,
+                    "WORK_RECOMMENDATION_DTL_ID",
+                    "WORK_RECOMMENDATION_DETAIL_ID",
+                )
+            ),
 
-        "file_status": record.get(
-            "FILE_STATUS"
-        ),
+        "attach_id":
+            clean(
+                get_value(
+                    record,
+                    "ATTACH_ID",
+                )
+            ),
 
-        "average_rating": record.get(
-            "AVERAGE_RATING"
-        ),
+        "file_status":
+            clean(
+                get_value(
+                    record,
+                    "FILE_STATUS",
+                )
+            ),
 
-        "source": "MPLADS / eSAKSHI",
+        "average_rating":
+            parse_money(
+                get_value(
+                    record,
+                    "AVERAGE_RATING",
+                )
+            ),
+
+        "source":
+            SOURCE_NAME,
+
+        "source_url":
+            SOURCE_URL,
+
+        "raw_record":
+            record,
+
     }
 
 
-def collect_works():
+# ============================================================
+# DATABASE TABLES
+# ============================================================
 
-    recommended_response = load_json(
-        "mplads_works_recommended.json"
+CREATE_METRICS_TABLE = """
+
+CREATE TABLE IF NOT EXISTS mplads_mp_metrics (
+
+    id BIGSERIAL PRIMARY KEY,
+
+    source_record_id TEXT NOT NULL,
+
+    mp_name TEXT,
+
+    house TEXT,
+
+    tenure TEXT,
+
+    state TEXT,
+
+    constituency TEXT,
+
+    constituency_id INTEGER,
+
+    allocated_limit NUMERIC(18,2),
+
+    expenditure_completed_ongoing
+        NUMERIC(18,2),
+
+    works_recommended_count
+        INTEGER,
+
+    works_recommended_amount
+        NUMERIC(18,2),
+
+    works_sanctioned_count
+        INTEGER,
+
+    works_sanctioned_amount
+        NUMERIC(18,2),
+
+    works_completed_count
+        INTEGER,
+
+    works_completed_amount
+        NUMERIC(18,2),
+
+    calamity_count
+        INTEGER,
+
+    calamity_amount
+        NUMERIC(18,2),
+
+    source TEXT NOT NULL
+        DEFAULT 'MPLADS / eSAKSHI',
+
+    source_url TEXT,
+
+    synced_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    created_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    updated_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    UNIQUE(source_record_id)
+
+);
+
+"""
+
+
+CREATE_WORKS_TABLE = """
+
+CREATE TABLE IF NOT EXISTS mplads_works (
+
+    id BIGSERIAL PRIMARY KEY,
+
+    source_record_id TEXT NOT NULL,
+
+    work_id TEXT,
+
+    mp_name TEXT,
+
+    house TEXT,
+
+    tenure TEXT,
+
+    state TEXT,
+
+    constituency TEXT,
+
+    constituency_id INTEGER,
+
+    district_authority TEXT,
+
+    work_category TEXT,
+
+    activity_name TEXT,
+
+    work_description TEXT,
+
+    work_stage TEXT,
+
+    work_status TEXT NOT NULL,
+
+    recommendation_date DATE,
+
+    sanction_date DATE,
+
+    actual_end_date DATE,
+
+    recommended_amount NUMERIC(18,2),
+
+    sanction_amount NUMERIC(18,2),
+
+    actual_amount NUMERIC(18,2),
+
+    letter_no TEXT,
+
+    work_recommendation_detail_id BIGINT,
+
+    attach_id TEXT,
+
+    file_status TEXT,
+
+    average_rating NUMERIC(12,4),
+
+    source TEXT NOT NULL
+        DEFAULT 'MPLADS / eSAKSHI',
+
+    source_url TEXT,
+
+    raw_record JSONB,
+
+    synced_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    created_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    updated_at TIMESTAMPTZ
+        NOT NULL DEFAULT NOW(),
+
+    UNIQUE(
+        source_record_id,
+        work_status
     )
 
-    sanctioned_response = load_json(
-        "mplads_works_sanctioned.json"
-    )
+);
 
-    completed_response = load_json(
-        "mplads_works_completed.json"
-    )
+"""
 
-    recommended = parse_embedded_json(
-        recommended_response.get(
-            "Total Works Recommended"
-        )
-    )
 
-    sanctioned = parse_embedded_json(
-        sanctioned_response.get(
-            "Total Sanction Work"
-        )
-    )
+# ============================================================
+# CONNECTION
+# ============================================================
 
-    completed = parse_embedded_json(
-        completed_response
-    )
-
-    works = []
-
-    for record in recommended:
-        works.append(
-            normalize_work(
-                record,
-                "recommended",
-            )
-        )
-
-    for record in sanctioned:
-        works.append(
-            normalize_work(
-                record,
-                "sanctioned",
-            )
-        )
-
-    for record in completed:
-        works.append(
-            normalize_work(
-                record,
-                "completed",
-            )
-        )
-
-    return works
-
-
-def create_tables(connection):
-
-    with connection.cursor() as cursor:
-
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS mplads_mp_metrics (
-                id BIGSERIAL PRIMARY KEY,
-
-                source_record_id TEXT NOT NULL UNIQUE,
-
-                mp_name TEXT NOT NULL,
-                house TEXT,
-                tenure TEXT,
-
-                state TEXT,
-                constituency TEXT,
-                constituency_id INTEGER,
-
-                allocated_limit NUMERIC(15,2),
-                expenditure_completed_ongoing NUMERIC(15,2),
-
-                works_recommended_count INTEGER,
-                works_recommended_amount NUMERIC(15,2),
-
-                works_sanctioned_count INTEGER,
-                works_sanctioned_amount NUMERIC(15,2),
-
-                works_completed_count INTEGER,
-                works_completed_amount NUMERIC(15,2),
-
-                calamity_count INTEGER,
-                calamity_amount NUMERIC(15,2),
-
-                source TEXT NOT NULL,
-
-                synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-            """
-        )
-
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS mplads_works (
-                id BIGSERIAL PRIMARY KEY,
-
-                source_record_id TEXT NOT NULL,
-                work_id BIGINT,
-
-                mp_name TEXT,
-
-                house TEXT,
-                tenure TEXT,
-
-                state TEXT,
-                constituency TEXT,
-                constituency_id INTEGER,
-
-                district_authority TEXT,
-
-                work_category TEXT,
-                activity_name TEXT,
-                work_description TEXT,
-
-                work_stage TEXT,
-                work_status TEXT,
-
-                recommendation_date DATE,
-                sanction_date DATE,
-                actual_end_date DATE,
-
-                recommended_amount NUMERIC(15,2),
-                sanction_amount NUMERIC(15,2),
-                actual_amount NUMERIC(15,2),
-
-                letter_no TEXT,
-
-                work_recommendation_detail_id BIGINT,
-
-                attach_id BIGINT,
-
-                file_status BOOLEAN,
-
-                average_rating NUMERIC(12,6),
-
-                source TEXT NOT NULL,
-
-                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-                UNIQUE(source_record_id, work_status)
-            );
-            """
-        )
-
-    connection.commit()
-
-
-def get_mp_metrics():
-
-    summary = load_json(
-        "mplads_mp_summary.json"
-    )
-
-    allocated = summary.get(
-        "Allocated Limit for Hon'ble MPs",
-        [],
-    )
-
-    expenditure = summary.get(
-        "Expenditure on Completed and On-going Works as on Date",
-        [],
-    )
-
-    recommended = summary.get(
-        "Works Recommended",
-        [],
-    )
-
-    sanctioned = summary.get(
-        "Works Sanctioned",
-        [],
-    )
-
-    completed = summary.get(
-        "Works Completed",
-        [],
-    )
-
-    calamity = summary.get(
-        "Amount consented for Calamity",
-        [],
-    )
-
-    tenure = summary.get(
-        "Current Tenure",
-        [],
-    )
-
-    tenure_name = None
-
-    if tenure:
-        tenure_name = tenure[0].get(
-            "CAPTION"
-        )
-
-    # Determine MP information from work data.
-    works = collect_works()
-
-    first_work = works[0] if works else {}
-
-    return {
-        "source_record_id": (
-            f"{first_work.get('mp_name', 'unknown')}"
-            f":{first_work.get('constituency_id', 'unknown')}"
-            f":{tenure_name or 'unknown'}"
-        ),
-
-        "mp_name": first_work.get(
-            "mp_name"
-        ),
-
-        "house": first_work.get(
-            "house"
-        ),
-
-        "tenure": tenure_name,
-
-        "state": first_work.get(
-            "state"
-        ),
-
-        "constituency": first_work.get(
-            "constituency"
-        ),
-
-        "constituency_id": first_work.get(
-            "constituency_id"
-        ),
-
-        "allocated_limit": (
-            parse_money(allocated[0])
-            if allocated
-            else None
-        ),
-
-        "expenditure_completed_ongoing": (
-            parse_money(expenditure[0])
-            if expenditure
-            else None
-        ),
-
-        "works_recommended_count": (
-            int(recommended[0])
-            if recommended
-            else None
-        ),
-
-        "works_recommended_amount": (
-            parse_money(recommended[1])
-            if len(recommended) > 1
-            else None
-        ),
-
-        "works_sanctioned_count": (
-            int(sanctioned[0])
-            if sanctioned
-            else None
-        ),
-
-        "works_sanctioned_amount": (
-            parse_money(sanctioned[1])
-            if len(sanctioned) > 1
-            else None
-        ),
-
-        "works_completed_count": (
-            int(completed[0])
-            if completed
-            else None
-        ),
-
-        "works_completed_amount": (
-            parse_money(completed[1])
-            if len(completed) > 1
-            else None
-        ),
-
-        "calamity_count": (
-            int(calamity[0])
-            if calamity
-            else None
-        ),
-
-        "calamity_amount": (
-            parse_money(calamity[1])
-            if len(calamity) > 1
-            else None
-        ),
-
-        "source": "MPLADS / eSAKSHI",
-    }
-
-
-def insert_metrics(connection, metrics):
-
-    with connection.cursor() as cursor:
-
-        cursor.execute(
-            """
-            INSERT INTO mplads_mp_metrics (
-                source_record_id,
-                mp_name,
-                house,
-                tenure,
-                state,
-                constituency,
-                constituency_id,
-                allocated_limit,
-                expenditure_completed_ongoing,
-                works_recommended_count,
-                works_recommended_amount,
-                works_sanctioned_count,
-                works_sanctioned_amount,
-                works_completed_count,
-                works_completed_amount,
-                calamity_count,
-                calamity_amount,
-                source,
-                synced_at,
-                updated_at
-            )
-            VALUES (
-                %(source_record_id)s,
-                %(mp_name)s,
-                %(house)s,
-                %(tenure)s,
-                %(state)s,
-                %(constituency)s,
-                %(constituency_id)s,
-                %(allocated_limit)s,
-                %(expenditure_completed_ongoing)s,
-                %(works_recommended_count)s,
-                %(works_recommended_amount)s,
-                %(works_sanctioned_count)s,
-                %(works_sanctioned_amount)s,
-                %(works_completed_count)s,
-                %(works_completed_amount)s,
-                %(calamity_count)s,
-                %(calamity_amount)s,
-                %(source)s,
-                NOW(),
-                NOW()
-            )
-            ON CONFLICT (source_record_id)
-            DO UPDATE SET
-                mp_name = EXCLUDED.mp_name,
-                tenure = EXCLUDED.tenure,
-                state = EXCLUDED.state,
-                constituency = EXCLUDED.constituency,
-                constituency_id = EXCLUDED.constituency_id,
-                allocated_limit = EXCLUDED.allocated_limit,
-                expenditure_completed_ongoing =
-                    EXCLUDED.expenditure_completed_ongoing,
-                works_recommended_count =
-                    EXCLUDED.works_recommended_count,
-                works_recommended_amount =
-                    EXCLUDED.works_recommended_amount,
-                works_sanctioned_count =
-                    EXCLUDED.works_sanctioned_count,
-                works_sanctioned_amount =
-                    EXCLUDED.works_sanctioned_amount,
-                works_completed_count =
-                    EXCLUDED.works_completed_count,
-                works_completed_amount =
-                    EXCLUDED.works_completed_amount,
-                calamity_count =
-                    EXCLUDED.calamity_count,
-                calamity_amount =
-                    EXCLUDED.calamity_amount,
-                synced_at = NOW(),
-                updated_at = NOW();
-            """,
-            metrics,
-        )
-
-    connection.commit()
-
-
-def insert_works(connection, works):
-
-    if not works:
-        return
-
-    rows = []
-
-    for work in works:
-
-        rows.append(
-            (
-                work["source_record_id"],
-                work["work_id"],
-                work["mp_name"],
-                work["house"],
-                work["tenure"],
-                work["state"],
-                work["constituency"],
-                work["constituency_id"],
-                work["district_authority"],
-                work["work_category"],
-                work["activity_name"],
-                work["work_description"],
-                work["work_stage"],
-                work["work_status"],
-                work["recommendation_date"],
-                work["sanction_date"],
-                work["actual_end_date"],
-                work["recommended_amount"],
-                work["sanction_amount"],
-                work["actual_amount"],
-                work["letter_no"],
-                work["work_recommendation_detail_id"],
-                work["attach_id"],
-                work["file_status"],
-                work["average_rating"],
-                work["source"],
-            )
-        )
-
-    with connection.cursor() as cursor:
-
-        execute_values(
-            cursor,
-            """
-            INSERT INTO mplads_works (
-                source_record_id,
-                work_id,
-                mp_name,
-                house,
-                tenure,
-                state,
-                constituency,
-                constituency_id,
-                district_authority,
-                work_category,
-                activity_name,
-                work_description,
-                work_stage,
-                work_status,
-                recommendation_date,
-                sanction_date,
-                actual_end_date,
-                recommended_amount,
-                sanction_amount,
-                actual_amount,
-                letter_no,
-                work_recommendation_detail_id,
-                attach_id,
-                file_status,
-                average_rating,
-                source
-            )
-            VALUES %s
-            ON CONFLICT (
-                source_record_id,
-                work_status
-            )
-            DO UPDATE SET
-                work_stage = EXCLUDED.work_stage,
-                work_status = EXCLUDED.work_status,
-                recommendation_date =
-                    EXCLUDED.recommendation_date,
-                sanction_date =
-                    EXCLUDED.sanction_date,
-                actual_end_date =
-                    EXCLUDED.actual_end_date,
-                recommended_amount =
-                    EXCLUDED.recommended_amount,
-                sanction_amount =
-                    EXCLUDED.sanction_amount,
-                actual_amount =
-                    EXCLUDED.actual_amount,
-                district_authority =
-                    EXCLUDED.district_authority,
-                updated_at = NOW();
-            """,
-            rows,
-        )
-
-    connection.commit()
-
-
-def main():
+def connect_database():
 
     database_url = os.environ.get(
         "DATABASE_URL"
     )
 
     if not database_url:
-        raise RuntimeError(
-            "DATABASE_URL is not set."
+
+        print(
+            "ERROR: DATABASE_URL is not set."
         )
 
-    print()
-    print("=" * 70)
-    print("JANPRATINIDHI MPLADS IMPORTER")
-    print("=" * 70)
+        print()
 
-    print("\nConnecting to PostgreSQL...")
+        print(
+            '$env:DATABASE_URL="postgresql://postgres:YOUR_PASSWORD@localhost:5432/janpratinidhi"'
+        )
 
-    connection = psycopg2.connect(
-        database_url
-    )
-
-    print("✓ PostgreSQL connected")
-
-    print("\nCreating MPLADS tables...")
-
-    create_tables(connection)
-
-    print("✓ Tables ready")
-
-    # ---------------------------------------------------------
-    # MP summary
-    # ---------------------------------------------------------
-
-    print("\nReading MP summary...")
-
-    metrics = get_mp_metrics()
+        sys.exit(1)
 
     print(
-        f"MP: {metrics['mp_name']}"
+        "Connecting to PostgreSQL..."
     )
 
-    print(
-        f"Constituency: "
-        f"{metrics['constituency']}"
-    )
+    try:
 
-    print(
-        f"Tenure: "
-        f"{metrics['tenure']}"
-    )
+        connection = psycopg2.connect(
+            database_url
+        )
 
-    print(
-        f"Allocated: "
-        f"₹{metrics['allocated_limit']}"
-    )
+        print(
+            "✓ PostgreSQL connection established"
+        )
 
-    print(
-        f"Recommended: "
-        f"{metrics['works_recommended_count']} works / "
-        f"₹{metrics['works_recommended_amount']}"
-    )
+        return connection
 
-    print(
-        f"Sanctioned: "
-        f"{metrics['works_sanctioned_count']} works / "
-        f"₹{metrics['works_sanctioned_amount']}"
-    )
+    except psycopg2.OperationalError as error:
 
-    print(
-        f"Completed: "
-        f"{metrics['works_completed_count']} works / "
-        f"₹{metrics['works_completed_amount']}"
-    )
+        print()
+        print(
+            "ERROR: PostgreSQL connection failed:"
+        )
 
-    insert_metrics(
-        connection,
-        metrics,
-    )
+        print(error)
 
-    print("✓ MP metrics imported")
+        sys.exit(1)
 
-    # ---------------------------------------------------------
-    # Works
-    # ---------------------------------------------------------
 
-    print("\nReading work records...")
+# ============================================================
+# DATABASE SETUP
+# ============================================================
 
-    works = collect_works()
-
-    print(
-        f"Raw work records: {len(works)}"
-    )
-
-    insert_works(
-        connection,
-        works,
-    )
-
-    print(
-        f"✓ {len(works)} work records imported"
-    )
-
-    # ---------------------------------------------------------
-    # Verification
-    # ---------------------------------------------------------
+def setup_database(connection):
 
     with connection.cursor() as cursor:
 
         cursor.execute(
-            """
-            SELECT COUNT(*)
-            FROM mplads_works;
-            """
+            CREATE_METRICS_TABLE
         )
 
-        work_count = cursor.fetchone()[0]
+        cursor.execute(
+            CREATE_WORKS_TABLE
+        )
+
+        # Compatibility with the earlier importer.
 
         cursor.execute(
             """
-            SELECT COUNT(*)
-            FROM mplads_mp_metrics;
+            ALTER TABLE mplads_works
+            ADD COLUMN IF NOT EXISTS source_url TEXT
+            """
+        )
+        cursor.execute(
+    """
+    CREATE UNIQUE INDEX IF NOT EXISTS
+    mplads_works_source_status_uidx
+    ON mplads_works (source_record_id, work_status)
+    """
+)
+
+        cursor.execute(
+            """
+            ALTER TABLE mplads_works
+            ADD COLUMN IF NOT EXISTS raw_record JSONB
+            """
+        )
+        cursor.execute(
+    """
+    ALTER TABLE mplads_works
+    ADD COLUMN IF NOT EXISTS synced_at TIMESTAMPTZ DEFAULT NOW()
+    """
+)
+
+        cursor.execute(
+            """
+            ALTER TABLE mplads_mp_metrics
+            ADD COLUMN IF NOT EXISTS source_url TEXT
             """
         )
 
-        metric_count = cursor.fetchone()[0]
+    connection.commit()
+
+    print(
+        "✓ Database tables ready"
+    )
+
+
+# ============================================================
+# SUMMARY PARSING
+# ============================================================
+
+def get_summary_metric(
+    summary: dict[str, Any],
+    phrase: str,
+):
+
+    for key, value in summary.items():
+
+        if phrase.lower() in str(key).lower():
+
+            value = decode_json_string(
+                value
+            )
+
+            if isinstance(
+                value,
+                list,
+            ):
+
+                count = None
+                amount = None
+
+                for item in value:
+
+                    if count is None:
+                        count = parse_int(
+                            item
+                        )
+
+                    if amount is None:
+                        amount = parse_money(
+                            item
+                        )
+
+                return count, amount
+
+            return (
+                None,
+                parse_money(value),
+            )
+
+    return None, None
+
+
+def extract_summary_objects(
+    obj: Any,
+):
+
+    obj = decode_json_string(obj)
+
+    if isinstance(
+        obj,
+        dict,
+    ):
+
+        if any(
+            "works recommended"
+            in str(key).lower()
+            for key in obj
+        ):
+
+            return [obj]
+
+        result = []
+
+        for value in obj.values():
+
+            if isinstance(
+                value,
+                (dict, list, str),
+            ):
+
+                result.extend(
+                    extract_summary_objects(
+                        value
+                    )
+                )
+
+        return (
+            result
+            or [obj]
+        )
+
+    if isinstance(
+        obj,
+        list,
+    ):
+
+        return [
+            item
+            for item in obj
+            if isinstance(
+                item,
+                dict,
+            )
+        ]
+
+    return []
+
+
+# ============================================================
+# IMPORT MP METRICS
+# ============================================================
+
+def import_mp_metrics(
+    connection,
+    summary_raw,
+    works,
+):
+
+    summaries = extract_summary_objects(
+        summary_raw
+    )
+
+    if not summaries:
+
+        print(
+            "WARNING: No MP summary found."
+        )
+
+        return
+
+    for summary in summaries:
+
+        recommended_count, recommended_amount = (
+            get_summary_metric(
+                summary,
+                "Works Recommended",
+            )
+        )
+
+        sanctioned_count, sanctioned_amount = (
+            get_summary_metric(
+                summary,
+                "Works Sanctioned",
+            )
+        )
+
+        completed_count, completed_amount = (
+            get_summary_metric(
+                summary,
+                "Works Completed",
+            )
+        )
+
+        _, allocated_limit = (
+            get_summary_metric(
+                summary,
+                "Allocated Limit",
+            )
+        )
+
+        _, expenditure = (
+            get_summary_metric(
+                summary,
+                "Expenditure on Completed and On-going Works",
+            )
+        )
+
+        calamity_count, calamity_amount = (
+            get_summary_metric(
+                summary,
+                "Amount consented for Calamity",
+            )
+        )
+
+        first_work = (
+            works[0]
+            if works
+            else {}
+        )
+
+        mp_name = (
+            clean(
+                get_value(
+                    summary,
+                    "MP_NAME",
+                )
+            )
+            or first_work.get(
+                "mp_name"
+            )
+            or "Unknown MP"
+        )
+
+        state = (
+            clean(
+                get_value(
+                    summary,
+                    "STATE_NAME",
+                    "STATE",
+                )
+            )
+            or first_work.get(
+                "state"
+            )
+        )
+
+        constituency = (
+            clean(
+                get_value(
+                    summary,
+                    "CONSTITUENCY",
+                    "CONSTITUENCY_NAME",
+                )
+            )
+            or first_work.get(
+                "constituency"
+            )
+        )
+
+        constituency_id = (
+            parse_int(
+                get_value(
+                    summary,
+                    "CONSTITUENCY_ID",
+                )
+            )
+            or first_work.get(
+                "constituency_id"
+            )
+        )
+
+        tenure = (
+            clean(
+                get_value(
+                    summary,
+                    "TENURE",
+                )
+            )
+            or "18th Lok Sabha"
+        )
+
+        identity = "|".join(
+            [
+                mp_name,
+                state or "",
+                constituency or "",
+                str(
+                    constituency_id
+                    or ""
+                ),
+                tenure,
+            ]
+        )
+
+        source_record_id = (
+            "summary-"
+            + hashlib.sha256(
+                identity.encode(
+                    "utf-8"
+                )
+            ).hexdigest()[:24]
+        )
+
+        sql = """
+
+        INSERT INTO mplads_mp_metrics (
+
+            source_record_id,
+
+            mp_name,
+
+            house,
+
+            tenure,
+
+            state,
+
+            constituency,
+
+            constituency_id,
+
+            allocated_limit,
+
+            expenditure_completed_ongoing,
+
+            works_recommended_count,
+
+            works_recommended_amount,
+
+            works_sanctioned_count,
+
+            works_sanctioned_amount,
+
+            works_completed_count,
+
+            works_completed_amount,
+
+            calamity_count,
+
+            calamity_amount,
+
+            source,
+
+            source_url,
+
+            synced_at,
+
+            updated_at
+
+        )
+
+        VALUES (
+
+            %s,%s,'lok_sabha',%s,%s,%s,%s,
+
+            %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+
+            %s,%s,NOW(),NOW()
+
+        )
+
+        ON CONFLICT (
+            source_record_id
+        )
+
+        DO UPDATE SET
+
+            mp_name =
+                EXCLUDED.mp_name,
+
+            house =
+                EXCLUDED.house,
+
+            tenure =
+                EXCLUDED.tenure,
+
+            state =
+                EXCLUDED.state,
+
+            constituency =
+                EXCLUDED.constituency,
+
+            constituency_id =
+                EXCLUDED.constituency_id,
+
+            allocated_limit =
+                EXCLUDED.allocated_limit,
+
+            expenditure_completed_ongoing =
+                EXCLUDED.expenditure_completed_ongoing,
+
+            works_recommended_count =
+                EXCLUDED.works_recommended_count,
+
+            works_recommended_amount =
+                EXCLUDED.works_recommended_amount,
+
+            works_sanctioned_count =
+                EXCLUDED.works_sanctioned_count,
+
+            works_sanctioned_amount =
+                EXCLUDED.works_sanctioned_amount,
+
+            works_completed_count =
+                EXCLUDED.works_completed_count,
+
+            works_completed_amount =
+                EXCLUDED.works_completed_amount,
+
+            calamity_count =
+                EXCLUDED.calamity_count,
+
+            calamity_amount =
+                EXCLUDED.calamity_amount,
+
+            source =
+                EXCLUDED.source,
+
+            source_url =
+                EXCLUDED.source_url,
+
+            synced_at =
+                NOW(),
+
+            updated_at =
+                NOW()
+
+        """
+
+        with connection.cursor() as cursor:
+
+            cursor.execute(
+                sql,
+                (
+                    source_record_id,
+                    mp_name,
+                    tenure,
+                    state,
+                    constituency,
+                    constituency_id,
+                    allocated_limit,
+                    expenditure,
+                    recommended_count,
+                    recommended_amount,
+                    sanctioned_count,
+                    sanctioned_amount,
+                    completed_count,
+                    completed_amount,
+                    calamity_count,
+                    calamity_amount,
+                    SOURCE_NAME,
+                    SOURCE_URL,
+                ),
+            )
+
+        print()
+
+        print(
+            f"✓ MP metrics imported: {mp_name}"
+        )
+
+        print(
+            f"  Recommended: {recommended_count}"
+        )
+
+        print(
+            f"  Sanctioned: {sanctioned_count}"
+        )
+
+        print(
+            f"  Completed: {completed_count}"
+        )
+
+    connection.commit()
+
+
+# ============================================================
+# WORK IMPORT
+# ============================================================
+
+WORK_COLUMNS = [
+
+    "source_record_id",
+
+    "work_id",
+
+    "mp_name",
+
+    "house",
+
+    "tenure",
+
+    "state",
+
+    "constituency",
+
+    "constituency_id",
+
+    "district_authority",
+
+    "work_category",
+
+    "activity_name",
+
+    "work_description",
+
+    "work_stage",
+
+    "work_status",
+
+    "recommendation_date",
+
+    "sanction_date",
+
+    "actual_end_date",
+
+    "recommended_amount",
+
+    "sanction_amount",
+
+    "actual_amount",
+
+    "letter_no",
+
+    "work_recommendation_detail_id",
+
+    "attach_id",
+
+    "file_status",
+
+    "average_rating",
+
+    "source",
+
+    "source_url",
+
+    "raw_record",
+
+]
+
+
+def import_works(
+    connection,
+    works,
+):
+
+    if not works:
+
+        print(
+            "WARNING: No work records found."
+        )
+
+        return
+
+    rows = []
+
+    for work in works:
+
+        source_record_id = clean(
+            work.get(
+                "source_record_id"
+            )
+        )
+
+        # This should never happen now,
+        # but keep this guard as a final
+        # database safety check.
+
+        if not source_record_id:
+
+            print(
+                "WARNING: Skipping work "
+                "without source ID:"
+            )
+
+            print(
+                work.get(
+                    "mp_name"
+                ),
+                work.get(
+                    "activity_name"
+                ),
+            )
+
+            continue
+
+        row = []
+
+        for column in WORK_COLUMNS:
+
+            value = work.get(
+                column
+            )
+
+            if column == "raw_record":
+
+                value = Json(value)
+
+            row.append(value)
+
+        rows.append(
+            tuple(row)
+        )
+
+    if not rows:
+
+        print(
+            "WARNING: No valid work rows."
+        )
+
+        return
+
+    # Do not specify a conflict target.
+    #
+    # This makes the importer compatible with
+    # the earlier version of the table as well.
+
+    assignments = ", ".join(
+
+        f"{column}=EXCLUDED.{column}"
+
+        for column in WORK_COLUMNS
+
+        if column not in {
+            "source_record_id",
+            "source",
+        }
+
+    )
+
+    assignments += (
+        ", updated_at=NOW(), "
+        "synced_at=NOW()"
+    )
+
+    sql = f"""
+
+    INSERT INTO mplads_works (
+
+        {", ".join(WORK_COLUMNS)}
+
+    )
+
+    VALUES %s
+
+  ON CONFLICT (source_record_id, work_status)
+DO UPDATE SET
+
+        {assignments}
+
+    """
 
     print()
-    print("=" * 70)
-    print("✓ MPLADS IMPORT COMPLETE")
-    print("=" * 70)
 
     print(
-        f"\nMPLADS MP metric records: {metric_count}"
+        f"Inserting/updating "
+        f"{len(rows)} work records..."
     )
+
+    with connection.cursor() as cursor:
+
+        execute_values(
+            cursor,
+            sql,
+            rows,
+            page_size=100,
+        )
+
+    connection.commit()
 
     print(
-        f"MPLADS work records: {work_count}"
+        f"✓ Works imported: {len(rows)}"
     )
+
+
+# ============================================================
+# READ WORK FILES
+# ============================================================
+
+def read_all_work_files():
+
+    combined = []
+
+    sources = [
+
+        (
+            RECOMMENDED_FILE,
+            "recommended",
+        ),
+
+        (
+            SANCTIONED_FILE,
+            "sanctioned",
+        ),
+
+        (
+            COMPLETED_FILE,
+            "completed",
+        ),
+
+    ]
+
+    for path, status in sources:
+
+        raw = load_json(
+            path
+        )
+
+        if raw is None:
+            continue
+
+        raw_records = extract_records(
+            raw
+        )
+
+        print(
+            f"{path.name}: "
+            f"{len(raw_records)} "
+            f"raw {status} records"
+        )
+
+        for record in raw_records:
+
+            combined.append(
+                normalize_work(
+                    record,
+                    status,
+                )
+            )
+
+    # Deduplicate records in memory.
+
+    unique = {}
+
+    for work in combined:
+
+        key = (
+
+            work[
+                "source_record_id"
+            ],
+
+            work[
+                "work_status"
+            ],
+
+        )
+
+        unique[key] = work
+
+    return (
+        list(
+            unique.values()
+        ),
+        len(combined),
+    )
+
+
+# ============================================================
+# MAIN
+# ============================================================
+
+def main():
+
+    print()
+
+    print("=" * 68)
 
     print(
-        "\nSource: MPLADS / eSAKSHI"
+        "JANPRATINIDHI MPLADS IMPORTER"
     )
 
-    connection.close()
+    print("=" * 68)
+
+    print()
+
+    connection = (
+        connect_database()
+    )
+
+    try:
+
+        setup_database(
+            connection
+        )
+
+        print()
+
+        print(
+            "Reading MP summary..."
+        )
+
+        summary = load_json(
+            SUMMARY_FILE
+        )
+
+        if summary is not None:
+
+            print(
+                "✓ MP summary loaded"
+            )
+
+        print()
+
+        print(
+            "Reading work records..."
+        )
+
+        works, raw_count = (
+            read_all_work_files()
+        )
+
+        print()
+
+        print(
+            f"Raw work records: "
+            f"{raw_count}"
+        )
+
+        print(
+            f"Unique work records: "
+            f"{len(works)}"
+        )
+
+        # Import MP-level summary.
+
+        if summary is not None:
+
+            import_mp_metrics(
+                connection,
+                summary,
+                works,
+            )
+
+        # Import all work records.
+
+        import_works(
+            connection,
+            works,
+        )
+
+        print()
+
+        print("=" * 68)
+
+        print(
+            "MPLADS IMPORT COMPLETE"
+        )
+
+        print("=" * 68)
+
+        print()
+
+        print(
+            "Source:"
+        )
+
+        print(
+            SOURCE_URL
+        )
+
+        print()
+
+        print(
+            "PostgreSQL tables:"
+        )
+
+        print(
+            "  mplads_mp_metrics"
+        )
+
+        print(
+            "  mplads_works"
+        )
+
+        print()
+
+    except Exception as error:
+
+        connection.rollback()
+
+        print()
+
+        print("=" * 68)
+
+        print(
+            "IMPORT FAILED"
+        )
+
+        print("=" * 68)
+
+        print()
+
+        print(
+            f"{type(error).__name__}: "
+            f"{error}"
+        )
+
+        print()
+
+        print(
+            "Database transaction rolled back."
+        )
+
+        print()
+
+        raise
+
+    finally:
+
+        connection.close()
 
 
 if __name__ == "__main__":
+
     main()
