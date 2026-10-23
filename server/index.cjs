@@ -279,6 +279,52 @@ app.get("/api/mplads", async (req, res) => {
   }
 });
 
+app.get("/api/dashboard", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        COUNT(*)::int AS mp_count,
+        COALESCE(SUM(works_recommended_count), 0)::int AS recommended_count,
+        COALESCE(SUM(works_sanctioned_count), 0)::int AS sanctioned_count,
+        COALESCE(SUM(works_completed_count), 0)::int AS completed_count,
+        COALESCE(SUM(works_recommended_amount), 0)::numeric AS recommended_amount,
+        COALESCE(SUM(works_sanctioned_amount), 0)::numeric AS sanctioned_amount,
+        COALESCE(SUM(works_completed_amount), 0)::numeric AS completed_amount,
+        COALESCE(SUM(expenditure_completed_ongoing), 0)::numeric AS expenditure_completed_ongoing
+      FROM mplads_mp_metrics
+    `);
+
+    const row = result.rows[0];
+
+    res.json({
+      source: "MPLADS",
+      source_url: "https://www.mplads.gov.in/",
+      available: true,
+      last_synced_at: new Date().toISOString(),
+
+      metrics: {
+        mp_count: row.mp_count,
+        recommended: row.recommended_count,
+        sanctioned: row.sanctioned_count,
+        completed: row.completed_count,
+        recommended_amount: Number(row.recommended_amount),
+        sanctioned_amount: Number(row.sanctioned_amount),
+        completed_amount: Number(row.completed_amount),
+        expenditure_completed_ongoing: Number(
+          row.expenditure_completed_ongoing
+        ),
+      },
+    });
+  } catch (error) {
+    console.error("Dashboard error:", error);
+
+    res.status(500).json({
+      available: false,
+      error: "Failed to load dashboard data",
+    });
+  }
+});
+
 /* -----------------------------
    Start server
 ----------------------------- */

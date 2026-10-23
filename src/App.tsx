@@ -86,24 +86,20 @@ type PageProps = {
 };
 
 type ApiDashboard = {
-  mode: string;
+  source: string;
+  source_url: string;
   available: boolean;
   last_synced_at: string | null;
-  message: string;
   metrics: {
-    pai: number | null;
-    attendance: number | null;
-    questions: number;
-    active_issues: number;
-    debates: number;
-    bills: number;
+    mp_count: number;
+    recommended: number;
+    sanctioned: number;
+    completed: number;
+    recommended_amount: number;
+    sanctioned_amount: number;
+    completed_amount: number;
+    expenditure_completed_ongoing: number;
   };
-  sessions: {
-    session: string;
-    attendance: number | null;
-    questions: number;
-    participation: number | null;
-  }[];
 };
 
 const apiGet = async <T,>(path: string): Promise<T> => {
@@ -1471,13 +1467,519 @@ function Modal({
 
 function Dashboard({
   onPai,
-  onSource,
   onQuestion,
 }: PageProps) {
-  const dashboard = useQuery<ApiDashboard>({
-    queryKey: ["/api/dashboard"],
+  const [, setLocation] = useLocation();
+
+  const {
+    data: dashboard,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["dashboard", "mplads"],
     queryFn: () => apiGet<ApiDashboard>("dashboard"),
   });
+
+  const metrics = dashboard?.metrics;
+
+  const formatCrore = (amount: number | undefined) => {
+    if (amount == null) return "—";
+    return `₹${(amount / 10000000).toFixed(2)} Cr`;
+  };
+
+  const chartData = metrics
+    ? [
+        {
+          name: "Recommended",
+          value: metrics.recommended,
+        },
+        {
+          name: "Sanctioned",
+          value: metrics.sanctioned,
+        },
+        {
+          name: "Completed",
+          value: metrics.completed,
+        },
+      ]
+    : [];
+
+  return (
+    <div className="reveal">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <Badge tone="teal">
+            MPLADS · eSAKSHI
+          </Badge>
+
+          <h1 className="mt-4 font-display text-4xl tracking-[-.03em] sm:text-5xl">
+            Citizen development overview.
+          </h1>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            A live view of public development works currently available
+            through the JanPratinidhi MPLADS data pipeline.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+          <Check size={15} className="text-primary" />
+
+          {dashboard?.last_synced_at
+            ? `Data refreshed ${new Date(
+                dashboard.last_synced_at
+              ).toLocaleDateString("en-IN")}`
+            : "No verified sync"}
+        </div>
+      </div>
+
+      {isLoading && (
+        <Card className="p-8">
+          <div className="text-sm text-muted-foreground">
+            Loading public development records…
+          </div>
+        </Card>
+      )}
+
+      {isError && (
+        <Card className="p-8">
+          <div className="text-sm text-destructive">
+            Dashboard data is temporarily unavailable.
+          </div>
+        </Card>
+      )}
+
+      {dashboard && metrics && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric
+              label="Development works"
+              value={String(
+                metrics.recommended
+              )}
+              detail="Works recommended through MPLADS"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="Works sanctioned"
+              value={String(metrics.sanctioned)}
+              detail="Works recorded as sanctioned"
+              accent="saffron"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="Works completed"
+              value={String(metrics.completed)}
+              detail="Completed works in the current dataset"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="MPs covered"
+              value={String(metrics.mp_count)}
+              detail="Representatives present in imported data"
+              accent="red"
+              onClick={() => setLocation("/representatives")}
+            />
+          </div>
+
+          <div className="mt-8 grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
+            <Card className="p-5 sm:p-6">
+              <SectionHeading
+                eyebrow="Development pipeline"
+                title="Recommended → sanctioned → completed"
+                detail="MPLADS records currently available in JanPratinidhi."
+              />
+
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    margin={{
+                      top: 10,
+                      right: 10,
+                      left: 0,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(var(--border))"
+                      vertical={false}
+                    />
+
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <ChartTooltip
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--card))",
+                        fontSize: 12,
+                      }}
+                    />
+
+                    <Bar
+                      dataKey="value"
+                      name="Works"
+                      fill="#2e7180"
+                      radius={[5, 5, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">
+                Financial snapshot
+              </div>
+
+              <h2 className="mt-2 font-display text-2xl">
+                Public development spend
+              </h2>
+
+              <div className="mt-7 space-y-5">
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Recommended amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.recommended_amount)}
+                  </div>
+                </div>
+
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Sanctioned amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.sanctioned_amount)}
+                  </div>
+                </div>
+
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Completed works amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.completed_amount)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Completed + ongoing expenditure
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(
+                      metrics.expenditure_completed_ongoing
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => setLocation("/tracker")}
+                variant="outline"
+                className="mt-7 w-full"
+                testId="button-dashboard-tracker"
+              >
+                Open development tracker
+                <ArrowRight size={14} />
+              </Button>
+            </Card>
+          </div>
+
+          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-xs leading-5 text-muted-foreground">
+            <strong className="text-foreground">
+              Data note:
+            </strong>{" "}
+            This dashboard uses MPLADS / eSAKSHI records imported into
+            JanPratinidhi PostgreSQL. Parliamentary attendance, questions,
+            debates and PAI are intentionally not displayed here until
+            their corresponding authoritative data sources are connected.
+          </div>
+        </>
+      )}
+    </div>
+  );
+function Dashboard({
+  onPai,
+  onQuestion,
+}: PageProps) {
+  const [, setLocation] = useLocation();
+
+  const {
+    data: dashboard,
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: ["dashboard", "mplads"],
+    queryFn: () => apiGet<ApiDashboard>("dashboard"),
+  });
+
+  const metrics = dashboard?.metrics;
+
+  const formatCrore = (amount: number | undefined) => {
+    if (amount == null) return "—";
+    return `₹${(amount / 10000000).toFixed(2)} Cr`;
+  };
+
+  const chartData = metrics
+    ? [
+        {
+          name: "Recommended",
+          value: metrics.recommended,
+        },
+        {
+          name: "Sanctioned",
+          value: metrics.sanctioned,
+        },
+        {
+          name: "Completed",
+          value: metrics.completed,
+        },
+      ]
+    : [];
+
+  return (
+    <div className="reveal">
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-5">
+        <div>
+          <Badge tone="teal">
+            MPLADS · eSAKSHI
+          </Badge>
+
+          <h1 className="mt-4 font-display text-4xl tracking-[-.03em] sm:text-5xl">
+            Citizen development overview.
+          </h1>
+
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
+            A live view of public development works currently available
+            through the JanPratinidhi MPLADS data pipeline.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+          <Check size={15} className="text-primary" />
+
+          {dashboard?.last_synced_at
+            ? `Data refreshed ${new Date(
+                dashboard.last_synced_at
+              ).toLocaleDateString("en-IN")}`
+            : "No verified sync"}
+        </div>
+      </div>
+
+      {isLoading && (
+        <Card className="p-8">
+          <div className="text-sm text-muted-foreground">
+            Loading public development records…
+          </div>
+        </Card>
+      )}
+
+      {isError && (
+        <Card className="p-8">
+          <div className="text-sm text-destructive">
+            Dashboard data is temporarily unavailable.
+          </div>
+        </Card>
+      )}
+
+      {dashboard && metrics && (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <Metric
+              label="Development works"
+              value={String(
+                metrics.recommended
+              )}
+              detail="Works recommended through MPLADS"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="Works sanctioned"
+              value={String(metrics.sanctioned)}
+              detail="Works recorded as sanctioned"
+              accent="saffron"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="Works completed"
+              value={String(metrics.completed)}
+              detail="Completed works in the current dataset"
+              onClick={() => setLocation("/tracker")}
+            />
+
+            <Metric
+              label="MPs covered"
+              value={String(metrics.mp_count)}
+              detail="Representatives present in imported data"
+              accent="red"
+              onClick={() => setLocation("/representatives")}
+            />
+          </div>
+
+          <div className="mt-8 grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
+            <Card className="p-5 sm:p-6">
+              <SectionHeading
+                eyebrow="Development pipeline"
+                title="Recommended → sanctioned → completed"
+                detail="MPLADS records currently available in JanPratinidhi."
+              />
+
+              <div className="h-72">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={chartData}
+                    margin={{
+                      top: 10,
+                      right: 10,
+                      left: 0,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(var(--border))"
+                      vertical={false}
+                    />
+
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <YAxis
+                      allowDecimals={false}
+                      tick={{ fontSize: 11 }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <ChartTooltip
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--card))",
+                        fontSize: 12,
+                      }}
+                    />
+
+                    <Bar
+                      dataKey="value"
+                      name="Works"
+                      fill="#2e7180"
+                      radius={[5, 5, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <Card className="p-6">
+              <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-primary">
+                Financial snapshot
+              </div>
+
+              <h2 className="mt-2 font-display text-2xl">
+                Public development spend
+              </h2>
+
+              <div className="mt-7 space-y-5">
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Recommended amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.recommended_amount)}
+                  </div>
+                </div>
+
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Sanctioned amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.sanctioned_amount)}
+                  </div>
+                </div>
+
+                <div className="border-b border-border pb-4">
+                  <div className="text-sm text-muted-foreground">
+                    Completed works amount
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(metrics.completed_amount)}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    Completed + ongoing expenditure
+                  </div>
+
+                  <div className="mt-1 font-display text-2xl">
+                    {formatCrore(
+                      metrics.expenditure_completed_ongoing
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => setLocation("/tracker")}
+                variant="outline"
+                className="mt-7 w-full"
+                testId="button-dashboard-tracker"
+              >
+                Open development tracker
+                <ArrowRight size={14} />
+              </Button>
+            </Card>
+          </div>
+
+          <div className="mt-6 rounded-lg border border-border bg-muted/40 p-4 text-xs leading-5 text-muted-foreground">
+            <strong className="text-foreground">
+              Data note:
+            </strong>{" "}
+            This dashboard uses MPLADS / eSAKSHI records imported into
+            JanPratinidhi PostgreSQL. Parliamentary attendance, questions,
+            debates and PAI are intentionally not displayed here until
+            their corresponding authoritative data sources are connected.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
   const data = dashboard.data;
 
