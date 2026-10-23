@@ -172,9 +172,8 @@ function Logo({ compact = false }: { compact?: boolean }) {
     <Link
       href="/"
       data-testid="link-logo"
-      className={`flex items-center gap-3 ${
-        compact ? "justify-center" : ""
-      }`}
+      className={`flex items-center gap-3 ${compact ? "justify-center" : ""
+        }`}
     >
       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-accent text-accent-foreground shadow-sm">
         <Landmark size={19} strokeWidth={2.5} />
@@ -338,13 +337,12 @@ function Metric({
     >
       <Card className="relative overflow-hidden p-5 transition-transform group-hover:-translate-y-0.5">
         <span
-          className={`absolute left-0 top-0 h-full w-1 ${
-            accent === "saffron"
+          className={`absolute left-0 top-0 h-full w-1 ${accent === "saffron"
               ? "bg-accent"
               : accent === "red"
-              ? "bg-destructive"
-              : "bg-primary"
-          }`}
+                ? "bg-destructive"
+                : "bg-primary"
+            }`}
         />
 
         <div className="font-mono-ui text-[10px] uppercase tracking-[.16em] text-muted-foreground">
@@ -468,11 +466,10 @@ function Shell({
                   data-testid={`top-nav-${label
                     .toLowerCase()
                     .replaceAll(" ", "-")}`}
-                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
-                    active
+                  className={`group flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${active
                       ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  }`}
+                    }`}
                 >
                   <Icon
                     size={16}
@@ -494,11 +491,10 @@ function Shell({
                 aria-haspopup="menu"
                 aria-label="More navigation options"
                 data-testid="button-more-navigation"
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${
-                  moreOpen
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium transition-all ${moreOpen
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+                  }`}
               >
                 <MoreHorizontal size={17} />
                 <span>More</span>
@@ -541,18 +537,16 @@ function Shell({
                             data-testid={`more-nav-${label
                               .toLowerCase()
                               .replaceAll(" ", "-")}`}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all ${
-                              active
+                            className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] transition-all ${active
                                 ? "bg-primary/10 text-primary"
                                 : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                            }`}
+                              }`}
                           >
                             <span
-                              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${
-                                active
+                              className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${active
                                   ? "bg-primary/10"
                                   : "bg-muted"
-                              }`}
+                                }`}
                             >
                               <Icon size={16} />
                             </span>
@@ -769,18 +763,16 @@ function Shell({
                         data-testid={`mobile-main-${label
                           .toLowerCase()
                           .replaceAll(" ", "-")}`}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${
-                          active
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
+                          }`}
                       >
                         <span
-                          className={`grid h-9 w-9 place-items-center rounded-lg ${
-                            active
+                          className={`grid h-9 w-9 place-items-center rounded-lg ${active
                               ? "bg-primary/10"
                               : "bg-muted"
-                          }`}
+                            }`}
                         >
                           <Icon size={17} />
                         </span>
@@ -812,11 +804,10 @@ function Shell({
                         data-testid={`mobile-more-${label
                           .toLowerCase()
                           .replaceAll(" ", "-")}`}
-                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${
-                          active
+                        className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm transition-colors ${active
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                        }`}
+                          }`}
                       >
                         <Icon size={17} />
 
@@ -936,11 +927,10 @@ function Shell({
               key={href as string}
               href={href as string}
               data-testid={`mobile-nav-${href}`}
-              className={`grid place-items-center rounded-xl py-2.5 transition-colors ${
-                active
+              className={`grid place-items-center rounded-xl py-2.5 transition-colors ${active
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted"
-              }`}
+                }`}
             >
               <Icon size={18} />
             </Link>
@@ -1746,8 +1736,8 @@ function Dashboard({
                       issue.status === "Resolved"
                         ? "teal"
                         : issue.status === "Reported"
-                        ? "red"
-                        : "saffron"
+                          ? "red"
+                          : "saffron"
                     }
                   >
                     {issue.status}
@@ -2031,9 +2021,8 @@ function EmptyState({
   return (
     <div
       data-testid="empty-state"
-      className={`grid place-items-center text-center ${
-        compact ? "p-12" : "min-h-64 p-10"
-      }`}
+      className={`grid place-items-center text-center ${compact ? "p-12" : "min-h-64 p-10"
+        }`}
     >
       <div className="grid h-12 w-12 place-items-center rounded-full bg-muted text-muted-foreground">
         <ListFilter size={20} />
@@ -2058,6 +2047,236 @@ function EmptyState({
         </Button>
       )}
     </div>
+  );
+}
+
+function DevelopmentTracker() {
+  const [works, setWorks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/mplads/works?limit=100")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load MPLADS data");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setWorks(data.works ?? []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError("Unable to load MPLADS development data.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-8">
+        <div className="font-mono-ui text-[10px] uppercase tracking-[0.18em] text-primary">
+          Development Tracker
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl tracking-tight sm:text-5xl">
+              MPLADS development works
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Public development works recorded through the MPLADS / eSAKSHI
+              system.
+            </p>
+          </div>
+
+          <Badge tone="teal">
+            MPLADS / eSAKSHI
+          </Badge>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
+          Loading development records…
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Records loaded
+              </div>
+
+              <div className="mt-2 font-display text-4xl">
+                {works.length}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Source
+              </div>
+
+              <div className="mt-2 text-lg font-semibold">
+                MPLADS
+              </div>
+
+              <div className="mt-1 text-xs text-muted-foreground">
+                eSAKSHI public records
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Data path
+              </div>
+
+              <div className="mt-2 text-lg font-semibold">
+                PostgreSQL
+              </div>
+
+              <div className="mt-1 text-xs text-muted-foreground">
+                Served through JanPratinidhi API
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="font-display text-2xl">
+                Development works
+              </h2>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Showing records returned by the MPLADS API.
+              </p>
+            </div>
+
+            <div className="divide-y divide-border">
+              {works.map((work, index) => (
+                <div
+                  key={
+                    work.source_record_id ??
+                    work.work_id ??
+                    index
+                  }
+                  className="p-5 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="saffron">
+                          {work.work_status ||
+                            work.work_stage ||
+                            "Recorded"}
+                        </Badge>
+
+                        {work.work_category && (
+                          <span className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                            {work.work_category}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="mt-3 text-base font-semibold">
+                        {work.work_description ||
+                          work.activity_name ||
+                          "Development work"}
+                      </h3>
+
+                      <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <span className="text-muted-foreground">
+                            MP
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.mp_name || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            Constituency
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.constituency || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            State
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.state || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            District authority
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.district_authority || "—"}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                        Actual amount
+                      </div>
+
+                      <div className="mt-1 font-display text-xl">
+                        {work.actual_amount != null
+                          ? `₹${Number(
+                              work.actual_amount
+                            ).toLocaleString("en-IN")}`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {works.length === 0 && (
+                <div className="p-10 text-center text-sm text-muted-foreground">
+                  No MPLADS work records were returned.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4 text-xs leading-5 text-muted-foreground">
+            <strong className="text-foreground">
+              Data note:
+            </strong>{" "}
+            These records are sourced from MPLADS / eSAKSHI data imported
+            into the JanPratinidhi PostgreSQL database. The MP recommends
+            works; the relevant District Authority handles sanction and
+            execution.
+          </div>
+        </>
+      )}
+    </main>
   );
 }
 
@@ -2088,6 +2307,237 @@ function PaiModal({ onClose }: { onClose: () => void }) {
       "Bills and committee activity",
     ],
   ];
+
+  function DevelopmentTracker() {
+  const [works, setWorks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/mplads/works?limit=100")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load MPLADS data");
+        }
+
+        return response.json();
+      })
+      .then((data) => {
+        setWorks(data.works ?? []);
+      })
+      .catch((err) => {
+        console.error(err);
+        setError("Unable to load MPLADS development data.");
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, []);
+
+  return (
+    <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <div className="mb-8">
+        <div className="font-mono-ui text-[10px] uppercase tracking-[0.18em] text-primary">
+          Development Tracker
+        </div>
+
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="font-display text-4xl tracking-tight sm:text-5xl">
+              MPLADS development works
+            </h1>
+
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground">
+              Public development works recorded through the MPLADS / eSAKSHI
+              system.
+            </p>
+          </div>
+
+          <Badge tone="teal">
+            MPLADS / eSAKSHI
+          </Badge>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-muted-foreground">
+          Loading development records…
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-xl border border-border bg-card p-8 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {!loading && !error && (
+        <>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Records loaded
+              </div>
+
+              <div className="mt-2 font-display text-4xl">
+                {works.length}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Source
+              </div>
+
+              <div className="mt-2 text-lg font-semibold">
+                MPLADS
+              </div>
+
+              <div className="mt-1 text-xs text-muted-foreground">
+                eSAKSHI public records
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5">
+              <div className="font-mono-ui text-[10px] uppercase tracking-wider text-muted-foreground">
+                Data path
+              </div>
+
+              <div className="mt-2 text-lg font-semibold">
+                PostgreSQL
+              </div>
+
+              <div className="mt-1 text-xs text-muted-foreground">
+                Served through JanPratinidhi API
+              </div>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border bg-card">
+            <div className="border-b border-border px-5 py-4">
+              <h2 className="font-display text-2xl">
+                Development works
+              </h2>
+
+              <p className="mt-1 text-xs text-muted-foreground">
+                Showing records returned by the MPLADS API.
+              </p>
+            </div>
+
+            <div className="divide-y divide-border">
+              {works.map((work, index) => (
+                <div
+                  key={
+                    work.source_record_id ??
+                    work.work_id ??
+                    index
+                  }
+                  className="p-5 transition-colors hover:bg-muted/40"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="saffron">
+                          {work.work_status ||
+                            work.work_stage ||
+                            "Recorded"}
+                        </Badge>
+
+                        {work.work_category && (
+                          <span className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                            {work.work_category}
+                          </span>
+                        )}
+                      </div>
+
+                      <h3 className="mt-3 text-base font-semibold">
+                        {work.work_description ||
+                          work.activity_name ||
+                          "Development work"}
+                      </h3>
+
+                      <div className="mt-3 grid gap-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <span className="text-muted-foreground">
+                            MP
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.mp_name || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            Constituency
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.constituency || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            State
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.state || "—"}
+                          </strong>
+                        </div>
+
+                        <div>
+                          <span className="text-muted-foreground">
+                            District authority
+                          </span>
+
+                          <strong className="mt-1 block">
+                            {work.district_authority || "—"}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono-ui text-[10px] uppercase text-muted-foreground">
+                        Actual amount
+                      </div>
+
+                      <div className="mt-1 font-display text-xl">
+                        {work.actual_amount != null
+                          ? `₹${Number(
+                              work.actual_amount
+                            ).toLocaleString("en-IN")}`
+                          : "—"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {works.length === 0 && (
+                <div className="p-10 text-center text-sm text-muted-foreground">
+                  No MPLADS work records were returned.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-5 rounded-lg border border-border bg-muted/40 p-4 text-xs leading-5 text-muted-foreground">
+            <strong className="text-foreground">
+              Data note:
+            </strong>{" "}
+            These records are sourced from MPLADS / eSAKSHI data imported
+            into the JanPratinidhi PostgreSQL database. The MP recommends
+            works; the relevant District Authority handles sanction and
+            execution.
+          </div>
+        </>
+      )}
+    </main>
+  );
+}
 
   return (
     <Modal
@@ -2131,11 +2581,10 @@ function PaiModal({ onClose }: { onClose: () => void }) {
               <div
                 className="h-full rounded-full bg-primary"
                 style={{
-                  width: `${
-                    (Number(score.split(" / ")[0]) /
+                  width: `${(Number(score.split(" / ")[0]) /
                       Number(score.split(" / ")[1])) *
                     100
-                  }%`,
+                    }%`,
                 }}
               />
             </div>
@@ -2179,15 +2628,8 @@ function AppRouter({
   const path = location.split("?")[0];
 
   let page: ReactNode;
-
   if (path === "/") {
-    page = (
-      <Landing
-        onSource={setSource}
-        theme={theme}
-        setTheme={setTheme}
-      />
-    );
+    page = <Landing onSource={setSource} />;
   } else if (path === "/dashboard") {
     page = (
       <Dashboard
@@ -2198,6 +2640,8 @@ function AppRouter({
     );
   } else if (path === "/representatives") {
     page = <Directory />;
+  } else if (path === "/tracker") {
+    page = <DevelopmentTracker />;
   } else if (path === "/settings") {
     page = (
       <SettingsPage
